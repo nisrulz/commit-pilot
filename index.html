@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>commit-pilot</title>
+<link rel="icon" type="image/svg+xml" href="img/logo.svg">
+<style>
+/* One Dark (vibrant terminal theme) */
+:root {
+  --base00: #000000;
+  --base01: #15171c;
+  --base02: #3e4451;
+  --base03: #5c6370;
+  --base04: #828997;
+  --base05: #abb2bf;
+  --base06: #e6e6e6;
+  --base07: #ffffff;
+  --base08: #e06c75;
+  --base09: #d19a66;
+  --base0A: #e5c07b;
+  --base0B: #98c379;
+  --base0C: #56b6c2;
+  --base0D: #61afef;
+  --base0E: #c678dd;
+  --base0F: #be5046;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--base00);
+  color: var(--base05);
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* terminal chrome */
+.terminal {
+  max-width: 860px;
+  margin: 40px auto;
+  width: 100%;
+  padding: 0 20px;
+}
+
+.title-bar {
+  background: var(--base01);
+  border-radius: 8px 8px 0 0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--base02);
+}
+
+.dots { display: flex; gap: 7px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot-r { background: var(--base08); }
+.dot-y { background: var(--base0A); }
+.dot-g { background: var(--base0B); }
+
+.title-text {
+  color: var(--base04);
+  font-size: 13px;
+  margin-left: auto;
+  margin-right: auto;
+  user-select: none;
+}
+
+.content {
+  background: var(--base00);
+  border: 1px solid var(--base02);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 28px 30px;
+  overflow: hidden;
+}
+
+.prompt-line {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+}
+
+.prompt-line .prompt { flex-shrink: 0; }
+.prompt-line .prompt-arrow { flex-shrink: 0; }
+.prompt-line .cmd { flex-shrink: 0; }
+
+.prompt { color: var(--base0B); white-space: nowrap; }
+.prompt-arrow { color: var(--base04); padding: 0 6px; }
+
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 18px;
+  background: var(--base05);
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* typed text blocks */
+.block { margin-bottom: 20px; }
+
+.block-title {
+  color: var(--base0D);
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+.block-text { color: var(--base05); margin-bottom: 4px; }
+
+.indent { padding-left: 22px; }
+
+.string { color: var(--base0B); }
+.comment { color: var(--base03); }
+.flag { color: var(--base0C); }
+.warn { color: var(--base0A); }
+.pipe { color: var(--base02); }
+
+.cmd { color: var(--base05); }
+
+/* output block sim */
+.output-box {
+  background: var(--base01);
+  border-left: 3px solid var(--base02);
+  padding: 10px 14px;
+  margin: 8px 0 16px 22px;
+  border-radius: 0 4px 4px 0;
+  font-size: 14px;
+  overflow-x: auto;
+}
+
+.output-box .line { white-space: pre; }
+
+/* markdown output */
+.md-section { margin: 6px 0 12px 22px; }
+.md-h2 { color: var(--base0D); font-weight: bold; font-size: 17px; margin-bottom: 8px; }
+.md-h3 { color: var(--base0C); font-weight: bold; font-size: 15px; margin-bottom: 6px; }
+.md-text { color: var(--base05); margin-bottom: 6px; }
+.md-bold { color: var(--base0E); font-weight: bold; }
+.md-list { margin: 6px 0; }
+.md-li { color: var(--base05); margin-bottom: 4px; padding-left: 4px; }
+.md-li::before { content: "• "; color: var(--base0A); }
+.md-code {
+  background: var(--base01);
+  border-left: 3px solid var(--base02);
+  padding: 16px 24px;
+  margin: 8px 0 14px 0;
+  border-radius: 0 4px 4px 0;
+  font-size: 14px;
+  overflow-x: auto;
+}
+.md-code .line { white-space: pre; }
+
+/* table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 12px 22px;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--base02);
+}
+
+th { color: var(--base0C); font-weight: normal; }
+td { color: var(--base05); }
+td:first-child { color: var(--base0A); }
+
+/* links */
+a { color: var(--base0D); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  color: var(--base03);
+  font-size: 13px;
+  border-top: 1px solid var(--base02);
+  margin-top: auto;
+}
+
+.footer a { color: var(--base04); }
+
+/* responsive */
+@media (max-width: 600px) {
+  .terminal { margin: 20px auto; padding: 0 12px; }
+  .content { padding: 18px 16px; font-size: 14px; }
+  .indent { padding-left: 16px; }
+  .indent2 { padding-left: 32px; }
+  .output-box { margin-left: 16px; }
+  table { margin-left: 16px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="terminal">
+  <div class="title-bar">
+    <div class="dots">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+    </div>
+    <div class="title-text">commit-pilot</div>
+  </div>
+  <div class="content" id="content">
+
+    <div class="prompt-line">
+      <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
+      <span class="cmd">cat README.md</span>
+      <span class="cursor"></span>
+    </div>
+
+    <div class="block">
+      <div class="block-title"># commit-pilot</div>
+      <div class="block-text indent">Never type <span class="string">"fix stuff"</span> again.</div>
+      <div class="block-text indent">Reads your uncommitted changes, groups related files,</div>
+      <div class="block-text indent">and writes conventional commit messages through AI.</div>
+    </div>
+
+    <div class="prompt-line">
+      <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
+      <span class="cmd">cat INSTALLATION.md</span>
+    </div>
+
+    <div class="md-section">
+      <div class="md-h2">Installation</div>
+      <div class="md-text">Install via the one-liner script:</div>
+      <div class="md-code">
+        <div class="line"><span class="warn">$</span> curl -sfL https://github.com/nisrulz/commit-pilot/releases/latest/download/install.sh | sh</div>
+      </div>
+      <div class="md-text">Or with Go:</div>
+      <div class="md-code">
+        <div class="line"><span class="warn">$</span> go install github.com/nisrulz/commit-pilot/src@latest</div>
+      </div>
+      <div class="md-text">Or build from source:</div>
+      <div class="md-code">
+        <div class="line"><span class="warn">$</span> make install</div>
+      </div>
+      <div class="md-h3">Provider setup</div>
+      <div class="md-text">After installing, set up your provider and download the model:</div>
+      <div class="md-list">
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/lmstudio.md">LMStudio</a> (default, gemma-4-e2b-it-qat)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/ollama.md">Ollama</a> (gemma4:e2b-it-qat)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/openai.md">OpenAI</a> (gpt-4o-mini)</div>
+      </div>
+    </div>
+    <div class="prompt-line">
+      <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
+      <span class="cmd">cat USAGE.md</span>
+    </div>
+
+    <div class="md-section">
+      <div class="md-h2">Usage</div>
+      <div class="md-code">
+        <div class="line">commit-pilot                         <span class="comment"># auto-chunk into logical commits</span></div>
+        <div class="line">commit-pilot 1                       <span class="comment"># one commit for all changes</span></div>
+        <div class="line">commit-pilot --dry-run               <span class="comment"># preview only</span></div>
+      </div>
+      <div class="md-h3">Providers</div>
+      <div class="md-text">Download the model in your provider first, then run commit-pilot.</div>
+      <div class="md-text">All configuration is via environment variables:</div>
+      <table>
+        <tr><th>env var</th><th>description</th><th>default</th></tr>
+        <tr><td>OPENAI_PROVIDER</td><td>Provider: lmstudio, ollama, openai</td><td>lmstudio</td></tr>
+        <tr><td>OPENAI_MODEL</td><td>Model name</td><td>gemma-4-e2b-it-qat</td></tr>
+        <tr><td>OPENAI_BASE_URL</td><td>API base URL</td><td>http://localhost:1234/v1</td></tr>
+        <tr><td>OPENAI_API_KEY</td><td>API key</td><td>—</td></tr>
+      </table>
+      <div class="md-code">
+        <div class="line">OPENAI_PROVIDER=lmstudio commit-pilot  <span class="comment"># LMStudio (default)</span></div>
+        <div class="line">OPENAI_PROVIDER=ollama OPENAI_MODEL=gemma4:e2b-it-qat commit-pilot</div>
+        <div class="line">OPENAI_PROVIDER=openai OPENAI_API_KEY=sk-... commit-pilot</div>
+      </div>
+      <div class="md-h3">Custom prompt</div>
+      <div class="md-text">Override the default prompt with inline text or a file:</div>
+      <div class="md-code">
+        <div class="line">COMMIT_PILOT_PROMPT=<span class="string">"Write concise commits"</span> commit-pilot</div>
+        <div class="line">COMMIT_PILOT_PROMPT_FILE=myprompt.txt commit-pilot</div>
+      </div>
+    </div>
+    <div class="prompt-line">
+      <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
+      <span class="cmd">cat CONFIGURATION.md</span>
+    </div>
+
+    <div class="md-section">
+      <div class="md-h2">Configuration</div>
+      <div class="md-text">Environment variable &gt; provider default &gt; built-in default</div>
+      <table>
+        <tr><th>setting</th><th>env var</th><th>default</th></tr>
+        <tr><td>provider</td><td>OPENAI_PROVIDER</td><td>lmstudio <span class="comment">(lmstudio, ollama, openai)</span></td></tr>
+        <tr><td>model</td><td>OPENAI_MODEL</td><td>gemma-4-e2b-it-qat</td></tr>
+        <tr><td>api base</td><td>OPENAI_BASE_URL</td><td>http://localhost:1234/v1</td></tr>
+        <tr><td>api key</td><td>OPENAI_API_KEY</td><td>—</td></tr>
+        <tr><td>mode</td><td><span class="flag">1</span> <span class="comment">(positional arg)</span></td><td>auto-chunk</td></tr>
+        <tr><td>dry run</td><td><span class="flag">--dry-run</span></td><td>false</td></tr>
+        <tr><td>prompt</td><td>COMMIT_PILOT_PROMPT</td><td>built-in</td></tr>
+        <tr><td>prompt file</td><td>COMMIT_PILOT_PROMPT_FILE</td><td>—</td></tr>
+      </table>
+      <div class="md-h3">Priority</div>
+      <div class="md-text">Environment variable &gt; provider default &gt; built-in default</div>
+    </div>
+    <div class="prompt-line">
+      <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
+      <span class="cmd">cat HOW_IT_WORKS.md</span>
+    </div>
+
+    <div class="md-section">
+      <div class="md-h2">How it works</div>
+      <div class="md-list">
+        <div class="md-li"><span class="md-bold">Git scan</span> - collects staged or unstaged changes</div>
+        <div class="md-li"><span class="md-bold">AI analysis</span> - sends diffs to the LLM you configured</div>
+        <div class="md-li"><span class="md-bold">Grouping</span> - AI returns conventional commit messages with file groupings</div>
+        <div class="md-li"><span class="md-bold">Execution</span> - stages and commits each logical group</div>
+      </div>
+      <div class="md-text">See <a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/how-it-works.md">how-it-works.md</a> for dry-run and commit output examples.</div>
+      <div class="md-code">
+        <div class="line"><span class="warn">$</span> commit-pilot</div>
+        <div class="line"><span class="pipe"> │</span></div>
+        <div class="line"><span class="pipe"> ├</span><span class="string"> * feat(api): add user search endpoint</span></div>
+        <div class="line"><span class="pipe"> │</span>   Add GET /api/users/:id endpoint.</div>
+        <div class="line"><span class="pipe"> │</span>   <span class="comment">> files:</span></div>
+        <div class="line"><span class="pipe"> │</span>     - src/api/users.go</div>
+        <div class="line"><span class="pipe"> │</span>     - src/api/query.go</div>
+        <div class="line"><span class="pipe"> │</span></div>
+        <div class="line"><span class="pipe"> ├</span><span class="string"> * committed!</span></div>
+        <div class="line"><span class="pipe"> │</span></div>
+        <div class="line"><span class="pipe"> ├</span><span class="string"> * docs: update readme</span></div>
+        <div class="line"><span class="pipe"> │</span>   Fix typo in installation section.</div>
+        <div class="line"><span class="pipe"> │</span>   <span class="comment">> files:</span></div>
+        <div class="line"><span class="pipe"> │</span>     - README.md</div>
+        <div class="line"><span class="pipe"> │</span></div>
+        <div class="line"><span class="pipe"> ├</span><span class="string"> * committed!</span></div>
+      </div>
+    </div>
+    <div class="prompt-line">
+      <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
+      <span class="cmd">cat THANKS.md</span>
+      <span class="cursor"></span>
+    </div>
+
+    <div class="md-section">
+      <div class="md-text">No more <span class="string">"fix stuff"</span> commits.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  <a href="https://github.com/nisrulz/commit-pilot">github.com/nisrulz/commit-pilot</a> &nbsp;·&nbsp; <a href="https://github.com/nisrulz/commit-pilot/blob/main/LICENSE">Apache 2.0 License</a>
+</div>
+
+</body>
+</html>
