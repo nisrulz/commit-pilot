@@ -8,29 +8,19 @@ Reads your uncommitted changes, groups related files, and writes conventional co
 
 ## Quick start
 
-### Install script
-
 ```bash
 curl -sfL https://github.com/nisrulz/commit-pilot/releases/latest/download/install.sh | sh
 ```
 
-No Go needed. The script picks the right binary for your OS and puts it in /usr/local/bin.
+No Go needed. The script picks the right binary for your OS and puts it in `~/go/bin`.
 
-### Go install
-
-```bash
-go install github.com/nisrulz/commit-pilot/src@latest
-```
-
-Requires [Go](https://go.dev/dl/) 1.21+.
-
-### Build from source
+Or build from source:
 
 ```bash
 make install
 ```
 
-Requires Go 1.21+ and GNU Make.
+Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
 
 ## Configuration
 
