@@ -58,12 +58,24 @@ tar xzf "$archive" -C "$tmpdir"
 find "$tmpdir" -name "$BIN" -type f -exec mv {} . \;
 rm -rf "$tmpdir" "$archive"
 
-dst="/usr/local/bin/$BIN"
-if [ -w /usr/local/bin ]; then
-  mv "$BIN" "$dst"
-else
-  echo "  Installing to $dst (requires sudo)..."
-  sudo mv "$BIN" "$dst"
-fi
+dst="$HOME/go/bin/$BIN"
+mkdir -p "$HOME/go/bin"
+mv "$BIN" "$dst"
 echo "  ✓ Installed $BIN to $dst"
+
+# Ensure go/bin is on PATH
+go_bin_expanded="${HOME}/go/bin"
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$go_bin_expanded"; then
+  rc_name=""
+  for f in ".zshrc" ".bashrc" ".bash_profile" ".zprofile"; do
+    [ -f "${HOME}/$f" ] && rc_name="$f" && break
+  done
+  [ -z "$rc_name" ] && rc_name=".zshrc"
+  rc="${HOME}/$rc_name"
+  if ! grep -qE "(export PATH=.*(go/bin|${HOME}/go/bin))" "$rc" 2>/dev/null; then
+    echo "export PATH=\"\$HOME/go/bin:\$PATH\"" >> "$rc"
+    echo "  ➜ Added ~/go/bin to ~/$rc_name (run: source ~/$rc_name)"
+  fi
+fi
+
 echo "  ➜ Run '$BIN --dry-run' to test"
