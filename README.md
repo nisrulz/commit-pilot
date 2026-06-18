@@ -2,7 +2,7 @@
 
 Never type `git commit -m "fix stuff"` again.
 
-Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio, Ollama, or OpenAI.
+**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, or any OpenAI-compatible API. **Zero telemetry — no data leaves your machine.**
 
 ![Banner](img/github_banner.webp)
 
@@ -52,11 +52,15 @@ See the provider-specific guides:
 
 - [LMStudio](docs/lmstudio.md) (default, gemma-4-e2b-it-qat)
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
-- [OpenAI](docs/openai.md) (gpt-4o-mini)
+- [OpenAI](docs/openai.md) (gpt-4o-mini) — or any OpenAI-compatible API
 
 ## How it works
 
 See [how-it-works.md](docs/how-it-works.md).
+
+## Privacy
+
+**Zero telemetry.** Commit Pilot doesn't track, phone home, or collect data. All AI processing happens via the provider you configure — no callbacks, no analytics, no data leaves your machine.
 
 ## Requirements
 
