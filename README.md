@@ -6,6 +6,8 @@ Never type `git commit -m "fix stuff"` again.
 
 ![Banner](img/github_banner.webp)
 
+📖 Read the story: [I Hate Writing Commit Messages, So I Built Commit Pilot](https://crushingcode.nisrulz.com/blog/i-hate-writing-commit-messages-so-i-built-commmit-pilot/)
+
 ## Quick start
 
 ```bash
