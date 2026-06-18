@@ -1,4 +1,4 @@
-# <img src="img/logo.svg"  height=24/> Commit Pilot
+# <img src="img/logo.svg"  height=24/> [Commit Pilot](https://nisrulz.com/commit-pilot/)
 
 Never type `git commit -m "fix stuff"` again.
 
