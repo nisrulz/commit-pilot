@@ -1,4 +1,4 @@
-module commit-pilot
+module github.com/nisrulz/commit-pilot
 
 go 1.26.4
 
