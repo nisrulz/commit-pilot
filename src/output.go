@@ -38,6 +38,7 @@ var (
 	yellow = color.New(color.FgYellow).SprintfFunc()
 	cyan   = color.New(color.FgCyan).SprintfFunc()
 	bold   = color.New(color.Bold).SprintfFunc()
+	red    = color.New(color.FgRed).SprintfFunc()
 )
 
 func printStep(msg string) {

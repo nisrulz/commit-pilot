@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -49,9 +50,9 @@ func parseCommitGroup(text string) (CommitGroup, error) {
 	return g, nil
 }
 
-func executeCommit(files []string, subject, description string, dryRun bool) {
+func executeCommit(files []string, subject, description string, dryRun bool) bool {
 	if len(files) == 0 {
-		return
+		return false
 	}
 
 	subject = strings.TrimSpace(subject)
@@ -64,10 +65,17 @@ func executeCommit(files []string, subject, description string, dryRun bool) {
 
 	if !dryRun {
 		addArgs := append([]string{"add", "--"}, files...)
-		gitRun(addArgs...)
-		gitRun("commit", "-m", subject, "-m", description)
+		if _, err := gitRun(addArgs...); err != nil {
+			fmt.Fprintf(os.Stderr, "  ! git add failed: %v\n", err)
+			return false
+		}
+		if _, err := gitRun("commit", "-m", subject, "-m", description); err != nil {
+			fmt.Fprintf(os.Stderr, "  ! git commit failed: %v\n", err)
+			return false
+		}
 	}
 
 	fmt.Println()
 	printCommitSection(subject, description, files, dryRun)
+	return true
 }

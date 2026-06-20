@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type Mode string
@@ -13,12 +14,13 @@ const (
 )
 
 type Config struct {
-	Model   string
-	APIBase string
-	APIKey  string
-	DryRun  bool
-	Mode    Mode
-	Prompt  string
+	Model         string
+	APIBase       string
+	APIKey        string
+	DryRun        bool
+	Mode          Mode
+	Prompt        string
+	ContextWindow int
 }
 
 var knownProviders = map[string]string{
@@ -59,9 +61,10 @@ func parseArgs(args []string) (rawFlags, bool) {
 }
 
 const (
-	maxEnvModelLen   = 256
-	maxEnvAPIBaseLen = 2048
-	maxEnvAPIKeyLen  = 512
+	maxEnvModelLen       = 256
+	maxEnvAPIBaseLen     = 2048
+	maxEnvAPIKeyLen      = 512
+	defaultContextWindow = 65536 // 64k tokens
 )
 
 func resolveConfig(f rawFlags) Config {
@@ -103,13 +106,21 @@ func resolveConfig(f rawFlags) Config {
 		}
 	}
 
+	contextWindow := defaultContextWindow
+	if cw := os.Getenv("COMMIT_PILOT_CONTEXT_WINDOW"); cw != "" {
+		if v, err := strconv.Atoi(cw); err == nil && v > 0 {
+			contextWindow = v
+		}
+	}
+
 	return Config{
-		Model:   model,
-		APIBase: apiBase,
-		APIKey:  apiKey,
-		DryRun:  f.DryRun,
-		Mode:    Mode(f.Mode),
-		Prompt:  prompt,
+		Model:         model,
+		APIBase:       apiBase,
+		APIKey:        apiKey,
+		DryRun:        f.DryRun,
+		Mode:          Mode(f.Mode),
+		Prompt:        prompt,
+		ContextWindow: contextWindow,
 	}
 }
 
@@ -122,11 +133,12 @@ Usage:
   commit-pilot --dry-run                 # preview only
 
 Environment variables:
-  OPENAI_PROVIDER         Provider: ollama, lmstudio, openai
-  OPENAI_MODEL            Model name (default: gemma-4-e2b-it-qat)
-  OPENAI_BASE_URL         API base URL
-  OPENAI_API_KEY          API key
-  COMMIT_PILOT_PROMPT     Custom prompt text (overrides default)
-  COMMIT_PILOT_PROMPT_FILE Path to custom prompt file (overrides default)
+  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai
+  OPENAI_MODEL                 Model name (default: gemma-4-e2b-it-qat)
+  OPENAI_BASE_URL              API base URL
+  OPENAI_API_KEY               API key
+  COMMIT_PILOT_PROMPT          Custom prompt text (overrides default)
+  COMMIT_PILOT_PROMPT_FILE     Path to custom prompt file (overrides default)
+  COMMIT_PILOT_CONTEXT_WINDOW  Model context window size in tokens (default: 65536)
 `)
 }
