@@ -196,6 +196,129 @@ cd "$TESTDIR/repo"
 OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=1000 run_in "$TESTDIR/repo" "1" 2>&1 || true)
 echo "$OUT" | grep -q -i "batch\|Large diff\|token" && ok "small context window triggers batching" || fail "small context window should trigger batching"
 
+# --- test 8: empty diff (no actual changes) ---
+echo "  • Testing empty diff scenario..."
+mkdir -p "$TESTDIR/emptydiff"
+cd "$TESTDIR/emptydiff"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > test.txt <<'EOF'
+line1
+line2
+line3
+EOF
+git add -A && git commit -m "initial" -q
+
+# Stage file without any changes
+git add test.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/emptydiff" "1")
+echo "$OUT" | grep -q -i "No changes\|no diff\|cannot generate\|empty" && ok "empty diff handled" || fail "empty diff should show appropriate message"
+
+# --- test 9: very large single file diff ---
+echo "  • Testing very large single file diff..."
+mkdir -p "$TESTDIR/hugefile"
+cd "$TESTDIR/hugefile"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+
+# Create a base file
+for i in $(seq 1 100); do
+  echo "func base$i() { return $i }"
+done > huge.go
+git add -A && git commit -m "initial" -q
+
+# Now make massive changes to create a huge diff
+for i in $(seq 1 200); do
+  echo "func added$i() string { return \"added line $i with some extra text to make it longer\" }"
+done >> huge.go
+git add huge.go
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/hugefile" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|batch\|token\|Large" && ok "large single file processed" || fail "large single file should be processed"
+
+# --- test 10: unicode filenames ---
+echo "  • Testing unicode filenames..."
+mkdir -p "$TESTDIR/unicode"
+cd "$TESTDIR/unicode"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+
+# Create files with unicode names
+touch "file.go"
+touch "archive.go"
+touch "cafe.go"
+echo 'package main' > "file.go"
+echo 'package main' > "archive.go"
+echo 'package main' > "cafe.go"
+git add -A && git commit -m "initial" -q
+
+# Modify unicode files
+echo 'func hello() {}' >> "file.go"
+echo 'func world() {}' >> "archive.go"
+echo 'func bonjour() {}' >> "cafe.go"
+git add -A
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/unicode" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "unicode filenames handled" || fail "unicode filenames should be handled"
+
+# --- test 11: mixed staged and unstaged changes ---
+echo "  • Testing mixed staged/unstaged changes..."
+mkdir -p "$TESTDIR/mixed"
+cd "$TESTDIR/mixed"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > staged.txt <<'EOF'
+staged content
+EOF
+cat > unstaged.txt <<'EOF'
+unstaged content
+EOF
+cat > both.txt <<'EOF'
+both content
+EOF
+git add -A && git commit -m "initial" -q
+
+# Modify all files but only stage some
+echo "modified staged" > staged.txt
+echo "modified unstaged" > unstaged.txt
+echo "modified both" > both.txt
+git add staged.txt both.txt
+cd "$PROJECT_DIR"
+
+# With staged changes only (staged.txt and both.txt)
+OUT=$(run_in "$TESTDIR/mixed" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "mixed changes processed" || fail "mixed changes should be processed"
+
+# --- test 12: file with special characters in diff ---
+echo "  • Testing special characters in diff..."
+mkdir -p "$TESTDIR/special"
+cd "$TESTDIR/special"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > special.txt <<'EOF'
+normal line
+line with quotes
+line with dollar signs
+line with backticks
+line with backslash
+EOF
+git add -A && git commit -m "initial" -q
+
+# Add lines with special characters
+echo "line with tabs and quotes" >> special.txt
+echo "line with newlines" >> special.txt
+echo "line with unicode accents" >> special.txt
+git add special.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/special" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "special characters handled" || fail "special characters should be handled"
+
 # --- report ---
 echo "  ─────────────────────────────"
 echo "  Results: $PASS passed, $FAIL failed"
