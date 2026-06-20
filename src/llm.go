@@ -35,6 +35,17 @@ type chatResponse struct {
 	Choices []chatChoice `json:"choices"`
 }
 
+// ContextLengthError indicates the input exceeded the model's context window
+type ContextLengthError struct {
+	Message    string
+	Estimated  int
+	Available  int
+}
+
+func (e *ContextLengthError) Error() string {
+	return e.Message
+}
+
 var jsonBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
 
 func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
@@ -60,7 +71,7 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: 180 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
@@ -73,8 +84,18 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API error (status %d): %s",
-			resp.StatusCode, strings.TrimSpace(string(respBody)))
+		errMsg := strings.TrimSpace(string(respBody))
+
+		// Detect context length errors from various providers
+		if isContextLengthError(errMsg) {
+			return "", &ContextLengthError{
+				Message:   fmt.Sprintf("Input too large for model context window (%s)", cfg.Model),
+				Estimated: estimateTokens(prompt),
+				Available: cfg.ContextWindow,
+			}
+		}
+
+		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, errMsg)
 	}
 
 	var chatResp chatResponse
@@ -87,6 +108,29 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	}
 
 	return chatResp.Choices[0].Message.Content, nil
+}
+
+// isContextLengthError checks if an error message indicates context length exceeded
+func isContextLengthError(errMsg string) bool {
+	lower := strings.ToLower(errMsg)
+	contextKeywords := []string{
+		"context length",
+		"context_length",
+		"contextwindow",
+		"max_tokens",
+		"maximum context",
+		"too many tokens",
+		"token limit",
+		"request too large",
+		"payload too large",
+		"input too long",
+	}
+	for _, keyword := range contextKeywords {
+		if strings.Contains(lower, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func warnInsecureHTTP(apiBase, apiKey string) {
