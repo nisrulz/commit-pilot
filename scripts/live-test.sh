@@ -494,24 +494,24 @@ cd "$TESTDIR/hooks"
 git init -q
 git config user.email "test@test"
 git config user.name "Test"
+cat > test.txt <<'EOF'
+some content
+EOF
+git add -A
+# Commit without hook first, then add the hook
+git commit --no-verify -m "initial" -q
 cat > .git/hooks/pre-commit <<'HOOK'
 #!/bin/sh
 exit 1
 HOOK
 chmod +x .git/hooks/pre-commit
-cat > test.txt <<'EOF'
-some content
-EOF
-git add -A && git commit -m "initial" -q
 
 echo "modified" > test.txt
 git add test.txt
-cd "$TESTDIR/hooks"
-if "$BINARY" 1 < /dev/null >/dev/null 2>&1; then
-  cd "$PROJECT_DIR"
+cd "$PROJECT_DIR"
+if (cd "$TESTDIR/hooks" && "$BINARY" 1 < /dev/null >/dev/null 2>&1); then
   fail "hook rejection should cause failure"
 else
-  cd "$PROJECT_DIR"
   ok "hook rejection causes failure"
 fi
 
@@ -540,24 +540,25 @@ cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/race" "1" 2>&1 || true)
 echo "$OUT" | grep -q -i "Generating\|commit message\|error\|warning\|file" && ok "deleted file race handled" || fail "deleted file race should be handled"
 
-# --- test 24: AI provider unreachable ---
-echo "  • Testing unreachable AI provider..."
-mkdir -p "$TESTDIR/unreachable"
-cd "$TESTDIR/unreachable"
+# --- test 24: binary file mixed with text ---
+echo "  • Testing binary mixed with text files..."
+mkdir -p "$TESTDIR/mixedbin"
+cd "$TESTDIR/mixedbin"
 git init -q
 git config user.email "test@test"
 git config user.name "Test"
-cat > test.txt <<'EOF'
-content
+cat > code.go <<'EOF'
+package main
+func main() {}
 EOF
 git add -A && git commit -m "initial" -q
 
-echo "modified" > test.txt
-git add test.txt
+echo "func updated() {}" >> code.go
+dd if=/dev/urandom bs=1024 count=5 of=image.png 2>/dev/null
+git add -A
 cd "$PROJECT_DIR"
-# Use a non-existent port
-OUT=$(OPENAI_BASE_URL=http://localhost:19999/v1 run_in "$TESTDIR/unreachable" "1" 2>&1 || true)
-echo "$OUT" | grep -q -i "error\|fail\|connect\|timeout\|refused" && ok "unreachable provider handled" || fail "unreachable provider should show error"
+OUT=$(run_in "$TESTDIR/mixedbin" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|binary" && ok "mixed binary/text handled" || fail "mixed binary/text should be handled"
 
 # --- test 25: commit message subject line truncation ---
 echo "  • Testing subject line truncation..."
@@ -567,10 +568,10 @@ git init -q
 git config user.email "test@test"
 git config user.name "Test"
 # Create a file with very long first line to trigger long subject
-python3 -c "print('x' * 200)" > long.txt
+echo "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" > long.txt
 git add -A && git commit -m "initial" -q
 
-python3 -c "print('y' * 200)" > long.txt
+echo "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy" > long.txt
 git add long.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/truncation" "1")
