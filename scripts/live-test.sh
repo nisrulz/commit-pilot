@@ -114,8 +114,8 @@ git reset --soft HEAD~3
 cd "$PROJECT_DIR"
 
 OUT=$(run_in "$TESTDIR/repo")
-echo "$OUT" | grep -q "changed file" && ok "detects changed files" || fail "should detect changed files"
-echo "$OUT" | grep -q -i "AI call failed\|Generating\|Processing" && ok "reaches AI stage" || fail "should reach AI stage"
+echo "$OUT" | grep -q "changed files\|changed file" && ok "detects changed files" || fail "should detect changed files"
+echo "$OUT" | grep -q -i "Found\|logical\|Generating\|commit message" && ok "reaches AI stage" || fail "should reach AI stage"
 
 # --- test 4: single mode ---
 OUT=$(run_in "$TESTDIR/repo" "1")
@@ -133,6 +133,68 @@ git add logo.bin
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/binary" "1")
 echo "$OUT" | grep -q "binary" && ok "detects binary files" || fail "should detect binary files"
+
+# --- test 6: large diff triggers batching ---
+echo "  • Testing large diff batching..."
+mkdir -p "$TESTDIR/large"
+cd "$TESTDIR/large"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+git commit --allow-empty -m "init" -q
+
+# Create many files to trigger batching
+for i in $(seq 1 15); do
+  echo "// Package main - file $i
+package main
+
+func init$i() string {
+  return \"initialized $i\"
+}
+
+func process$i(data string) string {
+  result := \"\"
+  for _, c := range data {
+    if c != 0 {
+      result += string(c)
+    }
+  }
+  return result
+}
+
+func validate$i(input int) bool {
+  if input < 0 {
+    return false
+  }
+  if input > 100 {
+    return false
+  }
+  return true
+}" > "file$i.go"
+done
+git add -A && git commit -m "chore: initial files" -q
+
+# Now modify all files to create a large diff
+for i in $(seq 1 15); do
+  echo "
+
+func updated$i() string {
+  return \"updated $i\"
+}" >> "file$i.go"
+done
+git add -A
+cd "$PROJECT_DIR"
+
+OUT=$(run_in "$TESTDIR/large" "1")
+echo "$OUT" | grep -q "changed file\|15" && ok "large diff detects all files" || fail "large diff should detect all files"
+echo "$OUT" | grep -q -i "Generating\|commit message" && ok "large diff processes" || fail "large diff should process"
+
+# --- test 7: context window configuration ---
+echo "  • Testing context window configuration..."
+cd "$TESTDIR/repo"
+# Small context window should trigger batching warning
+OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=1000 run_in "$TESTDIR/repo" "1" 2>&1 || true)
+echo "$OUT" | grep -q -i "batch\|Large diff\|token" && ok "small context window triggers batching" || fail "small context window should trigger batching"
 
 # --- report ---
 echo "  ─────────────────────────────"
