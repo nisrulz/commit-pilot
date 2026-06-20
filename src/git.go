@@ -45,6 +45,23 @@ func gitOutputLines(args ...string) []string {
 	return lines
 }
 
+// isBinaryDiff checks if diff content indicates a binary file
+func isBinaryDiff(diff string) bool {
+	// Check for explicit "Binary files" message
+	if strings.Contains(diff, "Binary files") {
+		return true
+	}
+
+	// Check for null bytes which indicate binary content
+	for i := 0; i < len(diff)-1; i++ {
+		if diff[i] == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func getGitChanges() (*Changes, error) {
 	_, err := gitRun("rev-parse", "--git-dir")
 	if err != nil {
@@ -94,7 +111,7 @@ func getGitChanges() (*Changes, error) {
 			continue
 		}
 
-		if strings.Contains(raw, "Binary files") {
+		if isBinaryDiff(raw) {
 			binaryFiles = append(binaryFiles, f)
 		} else {
 			withDiffs = append(withDiffs, FileDiff{Path: f, Diff: raw})

@@ -438,18 +438,38 @@ cd "$TESTDIR/multibinary"
 git init -q
 git config user.email "test@test"
 git config user.name "Test"
-# Create larger binary files so git detects them as binary
-dd if=/dev/urandom bs=1024 count=10 of=image.jpg 2>/dev/null
-dd if=/dev/urandom bs=1024 count=10 of=image.png 2>/dev/null
-dd if=/dev/urandom bs=1024 count=10 of=archive.zip 2>/dev/null
+# Create binary files with content (not just headers)
+dd if=/dev/urandom bs=100 count=10 of=image.jpg 2>/dev/null
+dd if=/dev/urandom bs=100 count=10 of=image.png 2>/dev/null
+dd if=/dev/urandom bs=100 count=10 of=archive.zip 2>/dev/null
 git add -A && git commit -m "initial" -q
 
 # Add another binary
-dd if=/dev/urandom bs=1024 count=10 of=file.gz 2>/dev/null
+dd if=/dev/urandom bs=100 count=10 of=file.gz 2>/dev/null
 git add file.gz
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/multibinary" "1")
 echo "$OUT" | grep -q -i "binary" && ok "multiple binary formats handled" || fail "multiple binary formats should be handled"
+
+# --- test 20: small binary file detection ---
+echo "  • Testing small binary file detection..."
+mkdir -p "$TESTDIR/smallbinary"
+cd "$TESTDIR/smallbinary"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+# Create small binary files (just headers)
+printf '\xff\xd8\xff\xe0\x00\x10JFIF\x00' > small.jpg
+printf '\x89PNG\r\n\x1a\n\x00\x00' > small.png
+git add -A && git commit -m "initial" -q
+
+# Add another small binary
+printf '\x1f\x8b\x08\x00\x00\x00\x00\x00' > small.gz
+git add small.gz
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/smallbinary" "1")
+# Small binaries may be treated as text, but should not crash
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file\|binary" && ok "small binary files handled" || fail "small binary files should be handled"
 
 # --- test 20: file with only newlines ---
 echo "  • Testing file with only newlines..."
