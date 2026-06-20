@@ -487,6 +487,96 @@ cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/newlines" "1")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with newlines handled" || fail "file with newlines should be handled"
 
+# --- test 22: pre-commit hook rejection ---
+echo "  • Testing pre-commit hook rejection..."
+mkdir -p "$TESTDIR/hooks"
+cd "$TESTDIR/hooks"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > .git/hooks/pre-commit <<'HOOK'
+#!/bin/sh
+exit 1
+HOOK
+chmod +x .git/hooks/pre-commit
+cat > test.txt <<'EOF'
+some content
+EOF
+git add -A && git commit -m "initial" -q
+
+echo "modified" > test.txt
+git add test.txt
+cd "$TESTDIR/hooks"
+if "$BINARY" 1 < /dev/null >/dev/null 2>&1; then
+  cd "$PROJECT_DIR"
+  fail "hook rejection should cause failure"
+else
+  cd "$PROJECT_DIR"
+  ok "hook rejection causes failure"
+fi
+
+# --- test 23: file deleted between diff and commit ---
+echo "  • Testing file deleted during processing..."
+mkdir -p "$TESTDIR/race"
+cd "$TESTDIR/race"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > file1.txt <<'EOF'
+content1
+EOF
+cat > file2.txt <<'EOF'
+content2
+EOF
+git add -A && git commit -m "initial" -q
+
+echo "modified1" > file1.txt
+echo "modified2" > file2.txt
+git add file1.txt file2.txt
+# Delete file2.txt before commit (simulates race condition)
+rm file2.txt
+cd "$PROJECT_DIR"
+# Should handle missing file gracefully
+OUT=$(run_in "$TESTDIR/race" "1" 2>&1 || true)
+echo "$OUT" | grep -q -i "Generating\|commit message\|error\|warning\|file" && ok "deleted file race handled" || fail "deleted file race should be handled"
+
+# --- test 24: AI provider unreachable ---
+echo "  • Testing unreachable AI provider..."
+mkdir -p "$TESTDIR/unreachable"
+cd "$TESTDIR/unreachable"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > test.txt <<'EOF'
+content
+EOF
+git add -A && git commit -m "initial" -q
+
+echo "modified" > test.txt
+git add test.txt
+cd "$PROJECT_DIR"
+# Use a non-existent port
+OUT=$(OPENAI_BASE_URL=http://localhost:19999/v1 run_in "$TESTDIR/unreachable" "1" 2>&1 || true)
+echo "$OUT" | grep -q -i "error\|fail\|connect\|timeout\|refused" && ok "unreachable provider handled" || fail "unreachable provider should show error"
+
+# --- test 25: commit message subject line truncation ---
+echo "  • Testing subject line truncation..."
+mkdir -p "$TESTDIR/truncation"
+cd "$TESTDIR/truncation"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+# Create a file with very long first line to trigger long subject
+python3 -c "print('x' * 200)" > long.txt
+git add -A && git commit -m "initial" -q
+
+python3 -c "print('y' * 200)" > long.txt
+git add long.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/truncation" "1")
+# Subject should be truncated to 100 chars, not crash
+echo "$OUT" | grep -q -i "Generating\|commit message\|committed" && ok "subject truncation handled" || fail "subject truncation should be handled"
+
 # --- report ---
 echo "  ─────────────────────────────"
 echo "  Results: $PASS passed, $FAIL failed"

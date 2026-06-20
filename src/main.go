@@ -87,7 +87,9 @@ func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 		if subject == "" {
 			subject = "chore: update"
 		}
-		executeCommit(allFilePaths(changes), subject, merged.Description, cfg.DryRun)
+		if !executeCommit(allFilePaths(changes), subject, merged.Description, cfg.DryRun) {
+			os.Exit(1)
+		}
 	} else {
 		group, err := groupFromAI(tmpl, cfg, changes.FilesWithDiffs, 4096)
 		if err != nil {
@@ -101,7 +103,9 @@ func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 		if subject == "" {
 			subject = "chore: update"
 		}
-		executeCommit(allFilePaths(changes), subject, group.Description, cfg.DryRun)
+		if !executeCommit(allFilePaths(changes), subject, group.Description, cfg.DryRun) {
+			os.Exit(1)
+		}
 	}
 }
 
@@ -146,8 +150,14 @@ func runAutoMode(changes *Changes, cfg Config, tmpl string) {
 	groups = mergeGroups(groups)
 
 	printStep(fmt.Sprintf("Found %s", pluralize(len(groups), "logical work package")))
+	commitFailed := false
 	for _, g := range groups {
-		executeCommit(g.Files, g.Subject, g.Description, cfg.DryRun)
+		if !executeCommit(g.Files, g.Subject, g.Description, cfg.DryRun) {
+			commitFailed = true
+		}
+	}
+	if commitFailed {
+		os.Exit(1)
 	}
 }
 
