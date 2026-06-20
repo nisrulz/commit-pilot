@@ -36,6 +36,22 @@ All configuration is done via environment variables.
 | API key | `OPENAI_API_KEY` | — |
 | Prompt text | `COMMIT_PILOT_PROMPT` | built-in |
 | Prompt file | `COMMIT_PILOT_PROMPT_FILE` | — |
+| Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
+
+## Handling large diffs
+
+Commit Pilot automatically batches large diffs that exceed the model's context window. When processing many files, it will:
+
+1. Estimate token count for your changes
+2. Split files into batches that fit the context window
+3. Process each batch sequentially
+4. Show progress: `Processing batch 1/3 (2 files)...`
+
+If you encounter context length errors, increase the window:
+
+```bash
+export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
+```
 
 ## Custom prompt
 

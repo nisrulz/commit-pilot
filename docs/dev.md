@@ -48,6 +48,7 @@ commit-pilot/
 │   ├── prompt.go         # Prompt loading and formatting
 │   ├── commit.go         # AI commit group parsing and execution
 │   ├── grouping.go       # File categorization, grouping, merging logic
+│   ├── tokens.go         # Token estimation, batch splitting
 │   ├── output.go         # Terminal output helpers (colors, formatting)
 │   └── prompt.txt        # Default prompt templates (embedded)
 ├── .gitignore
