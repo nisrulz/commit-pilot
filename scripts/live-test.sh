@@ -319,6 +319,154 @@ cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/special" "1")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "special characters handled" || fail "special characters should be handled"
 
+# --- test 13: deleted files ---
+echo "  • Testing deleted files..."
+mkdir -p "$TESTDIR/deleted"
+cd "$TESTDIR/deleted"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > todelete.txt <<'EOF'
+this file will be deleted
+EOF
+cat > tokeep.txt <<'EOF'
+this file stays
+EOF
+git add -A && git commit -m "initial" -q
+
+# Delete one file, modify another
+git rm todelete.txt
+echo "modified" > tokeep.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/deleted" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "deleted files handled" || fail "deleted files should be handled"
+
+# --- test 14: renamed files ---
+echo "  • Testing renamed files..."
+mkdir -p "$TESTDIR/renamed"
+cd "$TESTDIR/renamed"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > oldname.txt <<'EOF'
+content in old file
+EOF
+git add -A && git commit -m "initial" -q
+
+# Rename the file
+git mv oldname.txt newname.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/renamed" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "renamed files handled" || fail "renamed files should be handled"
+
+# --- test 15: symlinked files ---
+echo "  • Testing symlinked files..."
+mkdir -p "$TESTDIR/symlink"
+cd "$TESTDIR/symlink"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > real.txt <<'EOF'
+real file content
+EOF
+ln -s real.txt link.txt
+git add -A && git commit -m "initial" -q
+
+# Modify the real file
+echo "modified content" > real.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/symlink" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "symlinked files handled" || fail "symlinked files should be handled"
+
+# --- test 16: deeply nested directory ---
+echo "  • Testing deeply nested directory..."
+mkdir -p "$TESTDIR/nested/a/b/c/d/e/f/g"
+cd "$TESTDIR/nested"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > a/b/c/d/e/f/g/deep.txt <<'EOF'
+deeply nested file
+EOF
+git add -A && git commit -m "initial" -q
+
+echo "modified" > a/b/c/d/e/f/g/deep.txt
+git add a/b/c/d/e/f/g/deep.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/nested" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "deeply nested directory handled" || fail "deeply nested directory should be handled"
+
+# --- test 17: file with spaces in path ---
+echo "  • Testing file with spaces in path..."
+mkdir -p "$TESTDIR/spaces/my folder"
+cd "$TESTDIR/spaces"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+cat > "my folder/file with spaces.txt" <<'EOF'
+file with spaces in path
+EOF
+git add -A && git commit -m "initial" -q
+
+echo "modified" > "my folder/file with spaces.txt"
+git add "my folder/file with spaces.txt"
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/spaces" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with spaces in path handled" || fail "file with spaces in path should be handled"
+
+# --- test 18: empty file (0 bytes) ---
+echo "  • Testing empty file..."
+mkdir -p "$TESTDIR/emptyfile"
+cd "$TESTDIR/emptyfile"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+touch empty.txt
+git add -A && git commit -m "initial" -q
+
+# Add content to empty file
+echo "was empty" > empty.txt
+git add empty.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/emptyfile" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "empty file handled" || fail "empty file should be handled"
+
+# --- test 19: multiple binary formats ---
+echo "  • Testing multiple binary formats..."
+mkdir -p "$TESTDIR/multibinary"
+cd "$TESTDIR/multibinary"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+# Create larger binary files so git detects them as binary
+dd if=/dev/urandom bs=1024 count=10 of=image.jpg 2>/dev/null
+dd if=/dev/urandom bs=1024 count=10 of=image.png 2>/dev/null
+dd if=/dev/urandom bs=1024 count=10 of=archive.zip 2>/dev/null
+git add -A && git commit -m "initial" -q
+
+# Add another binary
+dd if=/dev/urandom bs=1024 count=10 of=file.gz 2>/dev/null
+git add file.gz
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/multibinary" "1")
+echo "$OUT" | grep -q -i "binary" && ok "multiple binary formats handled" || fail "multiple binary formats should be handled"
+
+# --- test 20: file with only newlines ---
+echo "  • Testing file with only newlines..."
+mkdir -p "$TESTDIR/newlines"
+cd "$TESTDIR/newlines"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+printf 'line1\n' > newlines.txt
+git add -A && git commit -m "initial" -q
+
+printf 'line1\n\n\n\n' > newlines.txt
+git add newlines.txt
+cd "$PROJECT_DIR"
+OUT=$(run_in "$TESTDIR/newlines" "1")
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with newlines handled" || fail "file with newlines should be handled"
+
 # --- report ---
 echo "  ─────────────────────────────"
 echo "  Results: $PASS passed, $FAIL failed"
