@@ -63,11 +63,9 @@ func main() {
 func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 	printProcessing("Generating commit message...")
 
-	// Split into batches if needed
 	batches := splitFilesIntoBatches(tmpl, changes.FilesWithDiffs, cfg.ContextWindow)
 
 	if len(batches) > 1 {
-		// Process each batch and collect commit groups
 		var allGroups []CommitGroup
 		for i, batch := range batches {
 			printProcessing(fmt.Sprintf("Processing batch %d/%d (%s)...",
@@ -84,20 +82,12 @@ func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 			allGroups = append(allGroups, group)
 		}
 
-		// Merge all groups into one
 		merged := mergeCommitGroups(allGroups)
 		subject := merged.Subject
 		if subject == "" {
 			subject = "chore: update"
 		}
-
-		allFiles := make([]string, 0, len(changes.FilesWithDiffs)+len(changes.BinaryFiles))
-		for _, f := range changes.FilesWithDiffs {
-			allFiles = append(allFiles, f.Path)
-		}
-		allFiles = append(allFiles, changes.BinaryFiles...)
-
-		executeCommit(allFiles, subject, merged.Description, cfg.DryRun)
+		executeCommit(allFilePaths(changes), subject, merged.Description, cfg.DryRun)
 	} else {
 		group, err := groupFromAI(tmpl, cfg, changes.FilesWithDiffs, 4096)
 		if err != nil {
@@ -107,20 +97,20 @@ func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 			}
 			die("AI call failed: %v", err)
 		}
-
 		subject := group.Subject
 		if subject == "" {
 			subject = "chore: update"
 		}
-
-		allFiles := make([]string, 0, len(changes.FilesWithDiffs)+len(changes.BinaryFiles))
-		for _, f := range changes.FilesWithDiffs {
-			allFiles = append(allFiles, f.Path)
-		}
-		allFiles = append(allFiles, changes.BinaryFiles...)
-
-		executeCommit(allFiles, subject, group.Description, cfg.DryRun)
+		executeCommit(allFilePaths(changes), subject, group.Description, cfg.DryRun)
 	}
+}
+
+func allFilePaths(changes *Changes) []string {
+	files := make([]string, 0, len(changes.FilesWithDiffs)+len(changes.BinaryFiles))
+	for _, f := range changes.FilesWithDiffs {
+		files = append(files, f.Path)
+	}
+	return append(files, changes.BinaryFiles...)
 }
 
 func runAutoMode(changes *Changes, cfg Config, tmpl string) {
@@ -133,114 +123,23 @@ func runAutoMode(changes *Changes, cfg Config, tmpl string) {
 
 	var groups []CommitGroup
 
-	// Process files in batches that fit the context window
 	for len(remaining) > 0 {
-		batches := splitFilesIntoBatches(tmpl, remaining, cfg.ContextWindow)
-
-		if len(batches) > 1 {
-			// Process first batch, then re-evaluate remaining
-			batch := batches[0]
-			printProcessing(fmt.Sprintf("Processing batch of %s files...", pluralize(len(batch), "")))
-
-			group, err := groupFromAI(tmpl, cfg, batch, 4096)
-			if err != nil {
-				if ctxErr, ok := err.(*ContextLengthError); ok {
-					printContextError(ctxErr)
-					return
-				}
-				die("AI call failed: %v", err)
-			}
-
-			if len(group.Files) == 0 && len(batch) > 0 {
-				// Fallback: take first file
-				f := batch[0]
-				groups = append(groups, CommitGroup{
-					Subject:     "chore: update",
-					Description: "Update " + f.Path,
-					Files:       []string{f.Path},
-				})
-				remaining = remaining[1:]
-				continue
-			}
-
-			remainingPaths := make([]string, len(remaining))
-			for i, f := range remaining {
-				remainingPaths[i] = f.Path
-			}
-
-			commitFiles := limitCommitScope(filterValidFiles(group.Files, remainingPaths))
-			if len(commitFiles) == 0 && len(batch) > 0 {
-				commitFiles = []string{batch[0].Path}
-			}
-
-			groups = append(groups, CommitGroup{
-				Subject:     group.Subject,
-				Description: group.Description,
-				Files:       commitFiles,
-			})
-
-			// Remove committed files
-			committed := make(map[string]bool, len(commitFiles))
-			for _, f := range commitFiles {
-				committed[f] = true
-			}
-			var next []FileDiff
-			for _, f := range remaining {
-				if !committed[f.Path] {
-					next = append(next, f)
-				}
-			}
-			remaining = next
-		} else {
-			// All remaining files fit in one context
-			group, err := groupFromAI(tmpl, cfg, remaining, 4096)
-			if err != nil {
-				if ctxErr, ok := err.(*ContextLengthError); ok {
-					printContextError(ctxErr)
-					return
-				}
-				die("AI call failed: %v", err)
-			}
-
-			if len(group.Files) == 0 {
-				f := remaining[0]
-				groups = append(groups, CommitGroup{
-					Subject:     "chore: update",
-					Description: "Update " + f.Path,
-					Files:       []string{f.Path},
-				})
-				remaining = remaining[1:]
-				continue
-			}
-
-			remainingPaths := make([]string, len(remaining))
-			for i, f := range remaining {
-				remainingPaths[i] = f.Path
-			}
-
-			commitFiles := limitCommitScope(filterValidFiles(group.Files, remainingPaths))
-			if len(commitFiles) == 0 {
-				commitFiles = []string{remaining[0].Path}
-			}
-
-			groups = append(groups, CommitGroup{
-				Subject:     group.Subject,
-				Description: group.Description,
-				Files:       commitFiles,
-			})
-
-			committed := make(map[string]bool, len(commitFiles))
-			for _, f := range commitFiles {
-				committed[f] = true
-			}
-			var next []FileDiff
-			for _, f := range remaining {
-				if !committed[f.Path] {
-					next = append(next, f)
-				}
-			}
-			remaining = next
+		group, commitFiles := processNextBatch(tmpl, cfg, remaining, &groups)
+		if len(commitFiles) == 0 && group.Subject == "" {
+			return
 		}
+
+		committed := make(map[string]bool, len(commitFiles))
+		for _, f := range commitFiles {
+			committed[f] = true
+		}
+		var next []FileDiff
+		for _, f := range remaining {
+			if !committed[f.Path] {
+				next = append(next, f)
+			}
+		}
+		remaining = next
 	}
 
 	groups = assignBinaryFiles(groups, changes.BinaryFiles)
@@ -250,6 +149,52 @@ func runAutoMode(changes *Changes, cfg Config, tmpl string) {
 	for _, g := range groups {
 		executeCommit(g.Files, g.Subject, g.Description, cfg.DryRun)
 	}
+}
+
+func processNextBatch(tmpl string, cfg Config, remaining []FileDiff, groups *[]CommitGroup) (CommitGroup, []string) {
+	batches := splitFilesIntoBatches(tmpl, remaining, cfg.ContextWindow)
+	batch := batches[0]
+
+	if len(batches) > 1 {
+		printProcessing(fmt.Sprintf("Processing batch of %s files...", pluralize(len(batch), "")))
+	}
+
+	group, err := groupFromAI(tmpl, cfg, batch, 4096)
+	if err != nil {
+		if ctxErr, ok := err.(*ContextLengthError); ok {
+			printContextError(ctxErr)
+			return CommitGroup{}, nil
+		}
+		die("AI call failed: %v", err)
+	}
+
+	if len(group.Files) == 0 {
+		f := batch[0]
+		*groups = append(*groups, CommitGroup{
+			Subject:     "chore: update",
+			Description: "Update " + f.Path,
+			Files:       []string{f.Path},
+		})
+		return group, []string{f.Path}
+	}
+
+	remainingPaths := make([]string, len(remaining))
+	for i, f := range remaining {
+		remainingPaths[i] = f.Path
+	}
+
+	commitFiles := limitCommitScope(filterValidFiles(group.Files, remainingPaths))
+	if len(commitFiles) == 0 {
+		commitFiles = []string{batch[0].Path}
+	}
+
+	*groups = append(*groups, CommitGroup{
+		Subject:     group.Subject,
+		Description: group.Description,
+		Files:       commitFiles,
+	})
+
+	return group, commitFiles
 }
 
 func mergeCommitGroups(groups []CommitGroup) CommitGroup {
