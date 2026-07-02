@@ -1,0 +1,99 @@
+package main
+
+import (
+	"testing"
+)
+
+func TestSectionByName_exists(t *testing.T) {
+	s := sectionByName("single")
+	if s == "" {
+		t.Fatal("expected non-empty section 'single'")
+	}
+	if !contains(s, "subject") {
+		t.Fatal("expected 'single' section to contain 'subject'")
+	}
+}
+
+func TestSectionByName_groups(t *testing.T) {
+	s := sectionByName("groups")
+	if s == "" {
+		t.Fatal("expected non-empty section 'groups'")
+	}
+	if !contains(s, "files") {
+		t.Fatal("expected 'groups' section to contain 'files'")
+	}
+}
+
+func TestSectionByName_summarize(t *testing.T) {
+	s := sectionByName("summarize")
+	if s == "" {
+		t.Fatal("expected non-empty section 'summarize'")
+	}
+}
+
+func TestSectionByName_plan(t *testing.T) {
+	s := sectionByName("plan")
+	if s == "" {
+		t.Fatal("expected non-empty section 'plan'")
+	}
+}
+
+func TestSectionByName_missing(t *testing.T) {
+	s := sectionByName("nonexistent")
+	if s == "" {
+		t.Fatal("expected fallback to last section for missing name")
+	}
+}
+
+func TestSanitizeDiff_removesNull(t *testing.T) {
+	input := "hello\x00world"
+	got := sanitizeDiff(input)
+	if contains(got, "\x00") {
+		t.Fatal("sanitizeDiff should remove null bytes")
+	}
+}
+
+func TestSanitizeDiff_keepsNewlines(t *testing.T) {
+	input := "line1\nline2\nline3"
+	got := sanitizeDiff(input)
+	if got != input {
+		t.Fatalf("expected '%s', got '%s'", input, got)
+	}
+}
+
+func TestFormatPrompt_basic(t *testing.T) {
+	result := formatPrompt("Files: {files}\nDiff: {diff}", []string{"a.go"}, "+func foo()")
+	if !contains(result, "a.go") {
+		t.Fatal("expected file list in formatted prompt")
+	}
+	if !contains(result, "+func foo()") {
+		t.Fatal("expected diff in formatted prompt")
+	}
+}
+
+func TestFormatDiffSection_single(t *testing.T) {
+	result := formatDiffSection([]FileDiff{{Path: "a.go", Diff: "+func"}})
+	if !contains(result, "a.go") {
+		t.Fatal("expected file name in diff section")
+	}
+}
+
+func TestFormatDiffSection_empty(t *testing.T) {
+	result := formatDiffSection(nil)
+	if result != "" {
+		t.Fatal("expected empty string for nil input")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && containsStr(s, substr)
+}
+
+func containsStr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
