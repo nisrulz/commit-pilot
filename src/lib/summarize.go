@@ -69,7 +69,7 @@ func ParseSummary(text, file string) FileSummary {
 
 	var s FileSummary
 	if err := json.Unmarshal(raw, &s); err != nil {
-		return FallbackSummary(string(raw), file)
+		return FallbackSummary(text, file)
 	}
 
 	if s.File == "" {
@@ -88,8 +88,13 @@ func FallbackSummary(text, file string) FileSummary {
 	if len(dump) > MaxDumpLen {
 		dump = dump[:MaxDumpLen] + "..."
 	}
-	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s, using raw response\n", yellow("!"), file)
-	fmt.Fprintf(os.Stderr, "    raw: %s\n", dump)
+	// First line only in the error message, full text goes into the summary
+	first := dump
+	if idx := strings.IndexAny(first, "\n."); idx > 0 {
+		first = first[:min(idx, 200)]
+	}
+	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s\n", yellow("!"), file)
+	fmt.Fprintf(os.Stderr, "    response: %s\n", first)
 
 	summary := text
 	if len(summary) > MaxSummaryLen {
