@@ -71,18 +71,18 @@ func parseCommitGroup(text string) (CommitGroup, error) {
 	}
 
 	var g CommitGroup
-	if err := json.Unmarshal(raw, &g); err != nil {
-		return CommitGroup{}, fmt.Errorf("parse commit group: %w", err)
-	}
-
-	if g.Subject == "" {
-		var groups []CommitGroup
-		if err := json.Unmarshal(raw, &groups); err == nil && len(groups) > 0 {
-			return groups[0], nil
+	if err := json.Unmarshal(raw, &g); err == nil {
+		if g.Subject != "" {
+			return g, nil
 		}
 	}
 
-	return g, nil
+	var groups []CommitGroup
+	if err := json.Unmarshal(raw, &groups); err == nil && len(groups) > 0 {
+		return groups[0], nil
+	}
+
+	return CommitGroup{}, fmt.Errorf("parse commit group: expected JSON object with 'subject' field")
 }
 
 func executeCommit(files []string, subject, description string, dryRun bool) bool {
@@ -91,6 +91,9 @@ func executeCommit(files []string, subject, description string, dryRun bool) boo
 	}
 
 	subject = strings.TrimSpace(subject)
+	subject = strings.ReplaceAll(subject, "\n", " ")
+	subject = strings.ReplaceAll(subject, "\r", "")
+	subject = strings.TrimLeft(subject, "-")
 	if subject == "" {
 		subject = "chore: update"
 	}

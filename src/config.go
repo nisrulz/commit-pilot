@@ -44,21 +44,18 @@ type rawFlags struct {
 
 func parseArgs(args []string) (rawFlags, bool) {
 	var f rawFlags
-
 	if len(args) > 0 && args[0] == "1" {
 		f.Mode = "1"
 		args = args[1:]
 	}
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
+	for _, a := range args {
+		switch a {
 		case "--dry-run":
 			f.DryRun = true
 		case "-h", "--help":
 			return f, true
 		}
 	}
-
 	return f, false
 }
 
@@ -66,7 +63,7 @@ const (
 	maxEnvModelLen       = 256
 	maxEnvAPIBaseLen     = 2048
 	maxEnvAPIKeyLen      = 512
-	defaultContextWindow = 65536 // 64k tokens
+	defaultContextWindow = 65536
 )
 
 func resolveConfig(f rawFlags) Config {

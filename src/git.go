@@ -23,6 +23,9 @@ func gitRun(args ...string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
+			if len(out) > 0 {
+				return string(out), nil
+			}
 			return "", fmt.Errorf("git %s: %s",
 				strings.Join(args, " "), strings.TrimSpace(string(ee.Stderr)))
 		}
@@ -53,7 +56,7 @@ func isBinaryDiff(diff string) bool {
 	}
 
 	// Check for null bytes which indicate binary content
-	for i := 0; i < len(diff)-1; i++ {
+	for i := 0; i < len(diff); i++ {
 		if diff[i] == 0 {
 			return true
 		}

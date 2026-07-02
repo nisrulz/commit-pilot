@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +47,8 @@ func (e *ContextLengthError) Error() string {
 	return e.Message
 }
 
+const maxJSONDepth = 100
+
 var jsonBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
 
 func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
@@ -62,16 +65,19 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
-
 	url := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	client := &http.Client{Timeout: 180 * time.Second}
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
@@ -177,6 +183,9 @@ func extractJSON(text string) (json.RawMessage, error) {
 	for i := start; i < len(text); i++ {
 		if text[i] == openChar {
 			depth++
+			if depth > maxJSONDepth {
+				return nil, fmt.Errorf("JSON nesting exceeds max depth %d", maxJSONDepth)
+			}
 		} else if text[i] == closeChar {
 			depth--
 			if depth == 0 {
