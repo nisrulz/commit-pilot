@@ -35,7 +35,15 @@ When changes exceed the model's context window (default 64k tokens), commit-pilo
 - Processes each batch sequentially
 - Merges results into final commits
 
-Configure the context window size:
+### Dynamic context detection (LM Studio)
+
+When using LM Studio with no explicit `COMMIT_PILOT_CONTEXT_WINDOW`, the tool automatically:
+
+1. Reads available system RAM (reserving 5 GB for OS and apps)
+2. Queries LM Studio's REST API for the loaded model's `max_context_length`
+3. Uses `lms load --estimate-only` to binary-search the largest context length that fits
+
+Configure the context window size to override:
 
 ```bash
 export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens

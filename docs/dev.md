@@ -45,6 +45,7 @@ commit-pilot/
 │   ├── main.go           # Entry point, orchestration
 │   ├── config.go         # CLI parsing, config resolution
 │   ├── git.go            # Git operations
+│   ├── context.go        # Dynamic context window detection
 │   ├── llm.go            # LLM API client, JSON extraction
 │   ├── prompt.go         # Prompt loading and formatting
 │   ├── commit.go         # AI commit group parsing and execution

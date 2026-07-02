@@ -83,7 +83,9 @@ func resolveConfig(f rawFlags) Config {
 		apiKey = apiKey[:maxEnvAPIKeyLen]
 	}
 	provider := os.Getenv("OPENAI_PROVIDER")
-
+	if provider == "" && apiBase == "" {
+		provider = "lmstudio"
+	}
 	if provider != "" {
 		if apiBase == "" {
 			apiBase = knownProviders[provider]
@@ -112,6 +114,11 @@ func resolveConfig(f rawFlags) Config {
 	if cw := os.Getenv("COMMIT_PILOT_CONTEXT_WINDOW"); cw != "" {
 		if v, err := strconv.Atoi(cw); err == nil && v > 0 {
 			contextWindow = v
+		}
+	} else if provider == "lmstudio" {
+		d := detectContextWindow(apiBase)
+		if d > 0 {
+			contextWindow = d
 		}
 	}
 

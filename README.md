@@ -53,6 +53,15 @@ If you encounter context length errors, increase the window:
 export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
 ```
 
+### Dynamic context window (LM Studio)
+
+When using LM Studio, commit-pilot automatically determines the optimal context window:
+- Checks available system RAM (reserves 5 GB for OS and apps)
+- Queries the loaded model's `max_context_length` via LM Studio's REST API
+- Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
+
+No configuration needed — the tool adapts to your hardware.
+
 ## Custom prompt
 
 Override the default prompt with inline text or a file:
