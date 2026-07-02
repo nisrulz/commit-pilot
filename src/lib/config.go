@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -23,27 +23,27 @@ type Config struct {
 	ContextWindow int
 }
 
-var knownProviders = map[string]string{
+var KnownProviders = map[string]string{
 	"ollama":   "http://localhost:11434/v1",
 	"lmstudio": "http://localhost:1234/v1",
 	"openai":   "https://api.openai.com/v1",
 	"unsloth":  "http://localhost:8888/v1",
 }
 
-var providerDefaults = map[string]string{
+var ProviderDefaults = map[string]string{
 	"ollama":   "gemma4:e2b-it-qat",
 	"lmstudio": "gemma-4-e2b-it-qat",
 	"openai":   "gpt-4o-mini",
 	"unsloth":  "unsloth/gemma-4-E4B-it-qat-GGUF",
 }
 
-type rawFlags struct {
+type RawFlags struct {
 	Mode   string
 	DryRun bool
 }
 
-func parseArgs(args []string) (rawFlags, bool) {
-	var f rawFlags
+func ParseArgs(args []string) (RawFlags, bool) {
+	var f RawFlags
 	if len(args) > 0 && args[0] == "1" {
 		f.Mode = "1"
 		args = args[1:]
@@ -64,9 +64,12 @@ const (
 	maxEnvAPIBaseLen     = 2048
 	maxEnvAPIKeyLen      = 512
 	defaultContextWindow = 65536
+	DefaultModel         = "gemma-4-e2b-it-qat"
+	DefaultAPIBase       = "http://localhost:1234/v1"
+	DefaultMaxTokens     = 4096
 )
 
-func resolveConfig(f rawFlags) Config {
+func ResolveConfig(f RawFlags) Config {
 	model := os.Getenv("OPENAI_MODEL")
 	if len(model) > maxEnvModelLen {
 		model = model[:maxEnvModelLen]
@@ -85,18 +88,18 @@ func resolveConfig(f rawFlags) Config {
 	}
 	if provider != "" {
 		if apiBase == "" {
-			apiBase = knownProviders[provider]
+			apiBase = KnownProviders[provider]
 		}
 		if model == "" {
-			model = providerDefaults[provider]
+			model = ProviderDefaults[provider]
 		}
 	}
 
 	if model == "" {
-		model = defaultModel
+		model = DefaultModel
 	}
 	if apiBase == "" {
-		apiBase = defaultAPIBase
+		apiBase = DefaultAPIBase
 	}
 
 	prompt := os.Getenv("COMMIT_PILOT_PROMPT")
@@ -113,7 +116,7 @@ func resolveConfig(f rawFlags) Config {
 			contextWindow = v
 		}
 	} else if provider == "lmstudio" {
-		d := detectContextWindow(apiBase)
+		d := DetectContextWindow(apiBase)
 		if d > 0 {
 			contextWindow = d
 		}

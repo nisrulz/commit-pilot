@@ -1,11 +1,12 @@
-package main
+package lib_test
 
 import (
+	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"testing"
 )
 
 func TestSectionByName_exists(t *testing.T) {
-	s := sectionByName("single")
+	s := lib.SectionByName("single")
 	if s == "" {
 		t.Fatal("expected non-empty section 'single'")
 	}
@@ -15,7 +16,7 @@ func TestSectionByName_exists(t *testing.T) {
 }
 
 func TestSectionByName_groups(t *testing.T) {
-	s := sectionByName("groups")
+	s := lib.SectionByName("groups")
 	if s == "" {
 		t.Fatal("expected non-empty section 'groups'")
 	}
@@ -25,21 +26,21 @@ func TestSectionByName_groups(t *testing.T) {
 }
 
 func TestSectionByName_summarize(t *testing.T) {
-	s := sectionByName("summarize")
+	s := lib.SectionByName("summarize")
 	if s == "" {
 		t.Fatal("expected non-empty section 'summarize'")
 	}
 }
 
 func TestSectionByName_plan(t *testing.T) {
-	s := sectionByName("plan")
+	s := lib.SectionByName("plan")
 	if s == "" {
 		t.Fatal("expected non-empty section 'plan'")
 	}
 }
 
 func TestSectionByName_missing(t *testing.T) {
-	s := sectionByName("nonexistent")
+	s := lib.SectionByName("nonexistent")
 	if s == "" {
 		t.Fatal("expected fallback to last section for missing name")
 	}
@@ -47,22 +48,22 @@ func TestSectionByName_missing(t *testing.T) {
 
 func TestSanitizeDiff_removesNull(t *testing.T) {
 	input := "hello\x00world"
-	got := sanitizeDiff(input)
+	got := lib.SanitizeDiff(input)
 	if contains(got, "\x00") {
-		t.Fatal("sanitizeDiff should remove null bytes")
+		t.Fatal("lib.SanitizeDiff should remove null bytes")
 	}
 }
 
 func TestSanitizeDiff_keepsNewlines(t *testing.T) {
 	input := "line1\nline2\nline3"
-	got := sanitizeDiff(input)
+	got := lib.SanitizeDiff(input)
 	if got != input {
 		t.Fatalf("expected '%s', got '%s'", input, got)
 	}
 }
 
 func TestFormatPrompt_basic(t *testing.T) {
-	result := formatPrompt("Files: {files}\nDiff: {diff}", []string{"a.go"}, "+func foo()")
+	result := lib.FormatPrompt("Files: {files}\nDiff: {diff}", []string{"a.go"}, "+func foo()")
 	if !contains(result, "a.go") {
 		t.Fatal("expected file list in formatted prompt")
 	}
@@ -72,14 +73,14 @@ func TestFormatPrompt_basic(t *testing.T) {
 }
 
 func TestFormatDiffSection_single(t *testing.T) {
-	result := formatDiffSection([]FileDiff{{Path: "a.go", Diff: "+func"}})
+	result := lib.FormatDiffSection([]lib.FileDiff{{Path: "a.go", Diff: "+func"}})
 	if !contains(result, "a.go") {
 		t.Fatal("expected file name in diff section")
 	}
 }
 
 func TestFormatDiffSection_empty(t *testing.T) {
-	result := formatDiffSection(nil)
+	result := lib.FormatDiffSection(nil)
 	if result != "" {
 		t.Fatal("expected empty string for nil input")
 	}

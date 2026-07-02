@@ -1,6 +1,7 @@
-package main
+package lib_test
 
 import (
+	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"strings"
 	"testing"
 )
@@ -25,8 +26,8 @@ func generateHugeDiff(lines int) string {
 }
 
 func TestSplitFileIntoChunks_smallDiff(t *testing.T) {
-	fd := FileDiff{Path: "main.go", Diff: "line1\nline2\nline3"}
-	chunks := splitFileIntoChunks(fd, 100000)
+	fd := lib.FileDiff{Path: "main.go", Diff: "line1\nline2\nline3"}
+	chunks := lib.SplitFileIntoChunks(fd, 100000)
 	if len(chunks) != 1 {
 		t.Fatalf("expected 1 chunk, got %d", len(chunks))
 	}
@@ -37,9 +38,9 @@ func TestSplitFileIntoChunks_smallDiff(t *testing.T) {
 
 func TestSplitFileIntoChunks_hugeDiff(t *testing.T) {
 	diff := generateHugeDiff(5000)
-	fd := FileDiff{Path: "huge.go", Diff: diff}
+	fd := lib.FileDiff{Path: "huge.go", Diff: diff}
 	diffBudget := 5000
-	chunks := splitFileIntoChunks(fd, diffBudget)
+	chunks := lib.SplitFileIntoChunks(fd, diffBudget)
 	if len(chunks) < 2 {
 		t.Fatalf("expected multiple chunks for huge diff (5000 lines, budget=%d), got %d", diffBudget, len(chunks))
 	}
@@ -47,16 +48,16 @@ func TestSplitFileIntoChunks_hugeDiff(t *testing.T) {
 		if c.Path != "huge.go" {
 			t.Fatalf("chunk %d: expected path huge.go, got %s", i, c.Path)
 		}
-		tok := estimateTokens(c.Diff)
+		tok := lib.EstimateTokens(c.Diff)
 		if tok > diffBudget {
 			t.Fatalf("chunk %d: %d tokens exceeds budget %d", i, tok, diffBudget)
 		}
 	}
 	totalChunkTokens := 0
 	for _, c := range chunks {
-		totalChunkTokens += estimateTokens(c.Diff)
+		totalChunkTokens += lib.EstimateTokens(c.Diff)
 	}
-	totalOrigTokens := estimateTokens(diff)
+	totalOrigTokens := lib.EstimateTokens(diff)
 	if totalChunkTokens > totalOrigTokens*2 {
 		t.Fatalf("chunking overhead too high: original=%d, sum(chunks)=%d", totalOrigTokens, totalChunkTokens)
 	}
@@ -64,35 +65,35 @@ func TestSplitFileIntoChunks_hugeDiff(t *testing.T) {
 
 func TestSplitFileIntoChunks_exactBoundary(t *testing.T) {
 	diff := "line1\nline2\nline3\n"
-	fd := FileDiff{Path: "exact.go", Diff: diff}
-	budget := estimateTokens(diff) + 100
-	chunks := splitFileIntoChunks(fd, budget)
+	fd := lib.FileDiff{Path: "exact.go", Diff: diff}
+	budget := lib.EstimateTokens(diff) + 100
+	chunks := lib.SplitFileIntoChunks(fd, budget)
 	if len(chunks) != 1 {
 		t.Fatalf("expected 1 chunk when diff fits exactly, got %d", len(chunks))
 	}
 }
 
 func TestSplitFileIntoChunks_zeroBudget(t *testing.T) {
-	fd := FileDiff{Path: "zero.go", Diff: "some content"}
-	chunks := splitFileIntoChunks(fd, 0)
+	fd := lib.FileDiff{Path: "zero.go", Diff: "some content"}
+	chunks := lib.SplitFileIntoChunks(fd, 0)
 	if chunks != nil {
 		t.Fatalf("expected nil for zero budget, got %v", chunks)
 	}
 }
 
 func TestSplitFileIntoChunks_negativeBudget(t *testing.T) {
-	fd := FileDiff{Path: "neg.go", Diff: "some content"}
-	chunks := splitFileIntoChunks(fd, -1)
+	fd := lib.FileDiff{Path: "neg.go", Diff: "some content"}
+	chunks := lib.SplitFileIntoChunks(fd, -1)
 	if chunks != nil {
 		t.Fatalf("expected nil for negative budget, got %v", chunks)
 	}
 }
 
 func TestSplitFilesIntoBatches_fitsInContext(t *testing.T) {
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "a.go", Diff: "small change"},
 	}
-	batches := splitFilesIntoBatches("template {files} {diff}", files, 100000)
+	batches := lib.SplitFilesIntoBatches("template {files} {diff}", files, 100000)
 	if len(batches) != 1 {
 		t.Fatalf("expected 1 batch, got %d", len(batches))
 	}
@@ -103,12 +104,12 @@ func TestSplitFilesIntoBatches_fitsInContext(t *testing.T) {
 
 func TestSplitFilesIntoBatches_triggersChunkingForHugeFile(t *testing.T) {
 	diff := generateHugeDiff(500)
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "huge.go", Diff: diff},
 	}
 	tmpl := "template {files} {diff}"
 	contextWindow := 8192
-	batches := splitFilesIntoBatches(tmpl, files, contextWindow)
+	batches := lib.SplitFilesIntoBatches(tmpl, files, contextWindow)
 	if len(batches) == 0 {
 		t.Fatal("expected at least one batch")
 	}
@@ -121,7 +122,7 @@ func TestSplitFilesIntoBatches_triggersChunkingForHugeFile(t *testing.T) {
 			totalChunks, len(batches))
 	}
 	for _, b := range batches {
-		if !canFitInContext(tmpl, b, contextWindow) {
+		if !lib.CanFitInContext(tmpl, b, contextWindow) {
 			t.Fatalf("batch with %d files and %d total lines does not fit in context window %d",
 				len(b), totalDiffLines(b), contextWindow)
 		}
@@ -130,12 +131,12 @@ func TestSplitFilesIntoBatches_triggersChunkingForHugeFile(t *testing.T) {
 
 func TestSplitFilesIntoBatches_chunkedPathPreserved(t *testing.T) {
 	diff := generateHugeDiff(500)
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "huge.go", Diff: diff},
 	}
 	tmpl := "template {files} {diff}"
 	contextWindow := 8192
-	batches := splitFilesIntoBatches(tmpl, files, contextWindow)
+	batches := lib.SplitFilesIntoBatches(tmpl, files, contextWindow)
 	for _, b := range batches {
 		for _, f := range b {
 			if f.Path != "huge.go" {
@@ -146,13 +147,13 @@ func TestSplitFilesIntoBatches_chunkedPathPreserved(t *testing.T) {
 }
 
 func TestSplitFilesIntoBatches_mixedFileSizes(t *testing.T) {
-	small := FileDiff{Path: "small.go", Diff: "tiny change"}
+	small := lib.FileDiff{Path: "small.go", Diff: "tiny change"}
 	diff := generateHugeDiff(500)
-	huge := FileDiff{Path: "huge.go", Diff: diff}
-	files := []FileDiff{small, huge}
+	huge := lib.FileDiff{Path: "huge.go", Diff: diff}
+	files := []lib.FileDiff{small, huge}
 	tmpl := "template {files} {diff}"
 	contextWindow := 8192
-	batches := splitFilesIntoBatches(tmpl, files, contextWindow)
+	batches := lib.SplitFilesIntoBatches(tmpl, files, contextWindow)
 	if len(batches) == 0 {
 		t.Fatal("expected at least one batch")
 	}
@@ -176,7 +177,7 @@ func TestSplitFilesIntoBatches_mixedFileSizes(t *testing.T) {
 	}
 }
 
-func totalDiffLines(batch []FileDiff) int {
+func totalDiffLines(batch []lib.FileDiff) int {
 	count := 0
 	for _, f := range batch {
 		count += len(strings.Split(f.Diff, "\n"))
@@ -187,22 +188,22 @@ func totalDiffLines(batch []FileDiff) int {
 func TestIsChunkedBatch(t *testing.T) {
 	tests := []struct {
 		name  string
-		batch []FileDiff
+		batch []lib.FileDiff
 		want  bool
 	}{
 		{
 			name:  "single file not chunked",
-			batch: []FileDiff{{Path: "a.go", Diff: "diff1"}},
+			batch: []lib.FileDiff{{Path: "a.go", Diff: "diff1"}},
 			want:  false,
 		},
 		{
 			name: "empty not chunked",
-			batch: []FileDiff{},
+			batch: []lib.FileDiff{},
 			want:  false,
 		},
 		{
 			name: "same file multiple chunks",
-			batch: []FileDiff{
+			batch: []lib.FileDiff{
 				{Path: "big.go", Diff: "chunk1"},
 				{Path: "big.go", Diff: "chunk2"},
 				{Path: "big.go", Diff: "chunk3"},
@@ -211,7 +212,7 @@ func TestIsChunkedBatch(t *testing.T) {
 		},
 		{
 			name: "different files not chunked",
-			batch: []FileDiff{
+			batch: []lib.FileDiff{
 				{Path: "a.go", Diff: "diff1"},
 				{Path: "b.go", Diff: "diff2"},
 			},
@@ -220,32 +221,32 @@ func TestIsChunkedBatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isChunkedBatch(tt.batch)
+			got := lib.IsChunkedBatch(tt.batch)
 			if got != tt.want {
-				t.Fatalf("isChunkedBatch(%s) = %v, want %v", tt.name, got, tt.want)
+				t.Fatalf("lib.IsChunkedBatch(%s) = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}
 }
 
 func TestGroupChunkedBatches_normalBatches(t *testing.T) {
-	batches := [][]FileDiff{
+	batches := [][]lib.FileDiff{
 		{{Path: "a.go", Diff: "diff1"}},
 		{{Path: "b.go", Diff: "diff2"}},
 	}
-	got := groupChunkedBatches(batches)
+	got := lib.GroupChunkedBatches(batches)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 groups for non-chunked batches, got %d", len(got))
 	}
 }
 
 func TestGroupChunkedBatches_consecutiveChunks(t *testing.T) {
-	batches := [][]FileDiff{
+	batches := [][]lib.FileDiff{
 		{{Path: "big.go", Diff: "chunk1"}},
 		{{Path: "big.go", Diff: "chunk2"}},
 		{{Path: "big.go", Diff: "chunk3"}},
 	}
-	got := groupChunkedBatches(batches)
+	got := lib.GroupChunkedBatches(batches)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 group for consecutive chunks of same file, got %d", len(got))
 	}
@@ -255,30 +256,30 @@ func TestGroupChunkedBatches_consecutiveChunks(t *testing.T) {
 }
 
 func TestGroupChunkedBatches_interleavedChunks(t *testing.T) {
-	batches := [][]FileDiff{
+	batches := [][]lib.FileDiff{
 		{{Path: "big.go", Diff: "chunk1"}},
 		{{Path: "small.go", Diff: "diff"}},
 		{{Path: "big.go", Diff: "chunk2"}},
 	}
-	got := groupChunkedBatches(batches)
+	got := lib.GroupChunkedBatches(batches)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 groups for interleaved chunks, got %d", len(got))
 	}
 }
 
 func TestGroupChunkedBatches_empty(t *testing.T) {
-	var batches [][]FileDiff
-	got := groupChunkedBatches(batches)
+	var batches [][]lib.FileDiff
+	got := lib.GroupChunkedBatches(batches)
 	if len(got) != 0 {
 		t.Fatalf("expected empty for empty input, got %d", len(got))
 	}
 }
 
 func TestGroupChunkedBatches_singleBatch(t *testing.T) {
-	batches := [][]FileDiff{
+	batches := [][]lib.FileDiff{
 		{{Path: "a.go", Diff: "diff"}},
 	}
-	got := groupChunkedBatches(batches)
+	got := lib.GroupChunkedBatches(batches)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 group for single batch, got %d", len(got))
 	}
@@ -286,7 +287,7 @@ func TestGroupChunkedBatches_singleBatch(t *testing.T) {
 
 func TestEstimateTokens_basic(t *testing.T) {
 	text := "hello world"
-	tok := estimateTokens(text)
+	tok := lib.EstimateTokens(text)
 	if tok <= 0 {
 		t.Fatalf("expected positive token count, got %d", tok)
 	}
@@ -295,8 +296,8 @@ func TestEstimateTokens_basic(t *testing.T) {
 func TestEstimateTokens_codeHeavy(t *testing.T) {
 	code := "func (x *Struct) Method(a, b, c int) (result *Thing, err error) { return nil, nil }"
 	plain := "the quick brown fox jumps over the lazy dog"
-	codeTokens := estimateTokens(code)
-	plainTokens := estimateTokens(plain)
+	codeTokens := lib.EstimateTokens(code)
+	plainTokens := lib.EstimateTokens(plain)
 	if codeTokens < plainTokens {
 		t.Fatalf("expected code-heavy text (%d tokens) to have >= plain text (%d tokens)",
 			codeTokens, plainTokens)
@@ -304,50 +305,50 @@ func TestEstimateTokens_codeHeavy(t *testing.T) {
 }
 
 func TestEstimateTokens_empty(t *testing.T) {
-	if tok := estimateTokens(""); tok != 0 {
+	if tok := lib.EstimateTokens(""); tok != 0 {
 		t.Fatalf("expected 0 for empty string, got %d", tok)
 	}
 }
 
 func TestEstimatePromptTokens(t *testing.T) {
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "a.go", Diff: "+func foo()\n"},
 		{Path: "b.go", Diff: "-func bar()\n"},
 	}
-	tok := estimatePromptTokens("template {files} {diff}", files)
+	tok := lib.EstimatePromptTokens("template {files} {diff}", files)
 	if tok <= 0 {
 		t.Fatalf("expected positive token count, got %d", tok)
 	}
 }
 
 func TestCanFitInContext(t *testing.T) {
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "a.go", Diff: "small change"},
 	}
-	if !canFitInContext("template", files, 10000) {
+	if !lib.CanFitInContext("template", files, 10000) {
 		t.Fatal("small change should fit in large context")
 	}
-	if canFitInContext("template", files, 1) {
+	if lib.CanFitInContext("template", files, 1) {
 		t.Fatal("small change should not fit in tiny context")
 	}
 }
 
 func TestCanFitInContext_hugeDiff(t *testing.T) {
 	diff := generateHugeDiff(5000)
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "huge.go", Diff: diff},
 	}
-	if canFitInContext("template {files} {diff}", files, 2048) {
+	if lib.CanFitInContext("template {files} {diff}", files, 2048) {
 		t.Fatal("huge diff should NOT fit in small context")
 	}
 }
 
 func TestAvailableDiffTokens(t *testing.T) {
-	budget := availableDiffTokens("template", 10000)
+	budget := lib.AvailableDiffTokens("template", 10000)
 	if budget <= 0 {
 		t.Fatalf("expected positive budget for large context, got %d", budget)
 	}
-	budget = availableDiffTokens("template", 1)
+	budget = lib.AvailableDiffTokens("template", 1)
 	if budget != 0 {
 		t.Fatalf("expected 0 budget for tiny context, got %d", budget)
 	}
@@ -355,7 +356,7 @@ func TestAvailableDiffTokens(t *testing.T) {
 
 func TestTruncateDiff_smallDiff(t *testing.T) {
 	diff := "line1\nline2\nline3\n"
-	result := truncateDiff(diff)
+	result := lib.TruncateDiff(diff)
 	if result != diff {
 		t.Fatalf("expected unchanged diff, got truncated version")
 	}
@@ -363,7 +364,7 @@ func TestTruncateDiff_smallDiff(t *testing.T) {
 
 func TestTruncateDiff_largeDiff(t *testing.T) {
 	diff := generateHugeDiff(200)
-	result := truncateDiff(diff)
+	result := lib.TruncateDiff(diff)
 	if result == diff {
 		t.Fatal("expected large diff to be truncated")
 	}
@@ -373,21 +374,21 @@ func TestTruncateDiff_largeDiff(t *testing.T) {
 }
 
 func TestMergeCommitGroups_single(t *testing.T) {
-	groups := []CommitGroup{
+	groups := []lib.CommitGroup{
 		{Subject: "fix: bug", Description: "Fixed a bug", Files: []string{"a.go"}},
 	}
-	merged := mergeCommitGroups(groups)
+	merged := lib.MergeCommitGroups(groups)
 	if merged.Subject != "fix: bug" {
 		t.Fatalf("expected subject 'fix: bug', got '%s'", merged.Subject)
 	}
 }
 
 func TestMergeCommitGroups_multiple(t *testing.T) {
-	groups := []CommitGroup{
+	groups := []lib.CommitGroup{
 		{Subject: "feat: add X", Description: "Added X"},
 		{Subject: "fix: Y", Description: "Fixed Y"},
 	}
-	merged := mergeCommitGroups(groups)
+	merged := lib.MergeCommitGroups(groups)
 	if merged.Subject != "feat: add X" {
 		t.Fatalf("expected first subject 'feat: add X', got '%s'", merged.Subject)
 	}
@@ -397,18 +398,18 @@ func TestMergeCommitGroups_multiple(t *testing.T) {
 }
 
 func TestMergeCommitGroups_empty(t *testing.T) {
-	merged := mergeCommitGroups(nil)
+	merged := lib.MergeCommitGroups(nil)
 	if merged.Subject != "" || merged.Description != "" {
-		t.Fatal("expected empty CommitGroup for nil input")
+		t.Fatal("expected empty lib.CommitGroup for nil input")
 	}
 }
 
 func TestMergeCommitGroups_defaultSubject(t *testing.T) {
-	groups := []CommitGroup{
+	groups := []lib.CommitGroup{
 		{Subject: "", Description: "Work"},
 		{Subject: "", Description: "More work"},
 	}
-	merged := mergeCommitGroups(groups)
+	merged := lib.MergeCommitGroups(groups)
 	if merged.Subject != "chore: update" {
 		t.Fatalf("expected default subject 'chore: update', got '%s'", merged.Subject)
 	}
@@ -416,16 +417,16 @@ func TestMergeCommitGroups_defaultSubject(t *testing.T) {
 
 func TestChunkThenGroupPipeline_hugeSingleFile(t *testing.T) {
 	diff := generateHugeDiff(500)
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "gigantic.go", Diff: diff},
 	}
 	tmpl := "template {files} {diff}"
 	contextWindow := 8192
-	batches := splitFilesIntoBatches(tmpl, files, contextWindow)
+	batches := lib.SplitFilesIntoBatches(tmpl, files, contextWindow)
 	if len(batches) == 0 {
 		t.Fatal("expected batches from huge file")
 	}
-	grouped := groupChunkedBatches(batches)
+	grouped := lib.GroupChunkedBatches(batches)
 	totalChunks := 0
 	for _, g := range grouped {
 		totalChunks += len(g)
@@ -434,7 +435,7 @@ func TestChunkThenGroupPipeline_hugeSingleFile(t *testing.T) {
 		t.Fatalf("expected huge file to produce multiple chunks, got %d total", totalChunks)
 	}
 	for _, g := range grouped {
-		if isChunkedBatch(g) {
+		if lib.IsChunkedBatch(g) {
 			for _, c := range g {
 				if c.Path != "gigantic.go" {
 					t.Fatalf("chunked batch should all have same path, got %s", c.Path)
@@ -445,7 +446,7 @@ func TestChunkThenGroupPipeline_hugeSingleFile(t *testing.T) {
 }
 
 func TestGroupFromAIChunked_empty(t *testing.T) {
-	g, err := groupFromAIChunked("template", Config{}, nil, 4096)
+	g, err := lib.GroupFromAIChunked("template", lib.Config{}, nil, 4096)
 	if err != nil {
 		t.Fatalf("unexpected error for empty chunks: %v", err)
 	}
@@ -455,7 +456,7 @@ func TestGroupFromAIChunked_empty(t *testing.T) {
 }
 
 func TestGroupFromAIChunked_emptyList(t *testing.T) {
-	g, err := groupFromAIChunked("template", Config{}, []FileDiff{}, 4096)
+	g, err := lib.GroupFromAIChunked("template", lib.Config{}, []lib.FileDiff{}, 4096)
 	if err != nil {
 		t.Fatalf("unexpected error for empty chunks: %v", err)
 	}
@@ -466,7 +467,7 @@ func TestGroupFromAIChunked_emptyList(t *testing.T) {
 
 func TestEstimateTokens_unicode(t *testing.T) {
 	text := "hello 世界 👋 foo"
-	tok := estimateTokens(text)
+	tok := lib.EstimateTokens(text)
 	if tok <= 0 {
 		t.Fatalf("expected positive token count for unicode text, got %d", tok)
 	}
@@ -474,12 +475,12 @@ func TestEstimateTokens_unicode(t *testing.T) {
 
 func TestEstimatePromptTokens_preservesOrder(t *testing.T) {
 	diff := generateHugeDiff(500)
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "alpha.go", Diff: diff},
 		{Path: "beta.go", Diff: diff},
 	}
 	tmpl := "template {files} {diff}"
-	batches := splitFilesIntoBatches(tmpl, files, 8192)
+	batches := lib.SplitFilesIntoBatches(tmpl, files, 8192)
 	seen := make(map[string]bool)
 	for _, b := range batches {
 		for _, f := range b {
@@ -498,21 +499,21 @@ func BenchmarkEstimateTokens(b *testing.B) {
 	text := generateHugeDiff(1000)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		estimateTokens(text)
+		lib.EstimateTokens(text)
 	}
 }
 
 func BenchmarkSplitFileIntoChunks(b *testing.B) {
 	diff := generateHugeDiff(5000)
-	fd := FileDiff{Path: "big.go", Diff: diff}
+	fd := lib.FileDiff{Path: "big.go", Diff: diff}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		splitFileIntoChunks(fd, 5000)
+		lib.SplitFileIntoChunks(fd, 5000)
 	}
 }
 
 func BenchmarkSplitFilesIntoBatches(b *testing.B) {
-	files := []FileDiff{
+	files := []lib.FileDiff{
 		{Path: "a.go", Diff: generateHugeDiff(500)},
 		{Path: "b.go", Diff: generateHugeDiff(500)},
 	}
@@ -520,12 +521,12 @@ func BenchmarkSplitFilesIntoBatches(b *testing.B) {
 	contextWindow := 8192
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		splitFilesIntoBatches(tmpl, files, contextWindow)
+		lib.SplitFilesIntoBatches(tmpl, files, contextWindow)
 	}
 }
 
 func BenchmarkGroupChunkedBatches(b *testing.B) {
-	batches := [][]FileDiff{
+	batches := [][]lib.FileDiff{
 		{{Path: "big.go", Diff: "chunk1"}},
 		{{Path: "big.go", Diff: "chunk2"}},
 		{{Path: "big.go", Diff: "chunk3"}},
@@ -534,6 +535,6 @@ func BenchmarkGroupChunkedBatches(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		groupChunkedBatches(batches)
+		lib.GroupChunkedBatches(batches)
 	}
 }

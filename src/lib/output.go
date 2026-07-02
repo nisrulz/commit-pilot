@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -7,9 +7,9 @@ import (
 	"github.com/fatih/color"
 )
 
-const wrapWidth = 72
+const WrapWidth = 72
 
-func wrapText(text string, width int) []string {
+func WrapText(text string, width int) []string {
 	var lines []string
 	runes := []rune(text)
 	for len(runes) > 0 {
@@ -41,15 +41,15 @@ var (
 	red    = color.New(color.FgRed).SprintfFunc()
 )
 
-func printStep(msg string) {
+func PrintStep(msg string) {
 	fmt.Printf("  %s %s\n", green("*"), msg)
 }
 
-func printProcessing(msg string) {
+func PrintProcessing(msg string) {
 	fmt.Printf("  %s %s\n", yellow(">"), msg)
 }
 
-func printCommitSection(subject, description string, filePaths []string, dryRun bool) {
+func PrintCommitSection(subject, description string, filePaths []string, dryRun bool) {
 	statusTag := "committed!"
 	colorFn := green
 	iconChar := "*"
@@ -63,7 +63,7 @@ func printCommitSection(subject, description string, filePaths []string, dryRun 
 	fmt.Println()
 
 	for _, line := range strings.Split(description, "\n") {
-		for _, wl := range wrapText(line, wrapWidth) {
+		for _, wl := range WrapText(line, WrapWidth) {
 			fmt.Printf("    %s\n", wl)
 		}
 	}

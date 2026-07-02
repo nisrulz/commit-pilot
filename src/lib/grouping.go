@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"path/filepath"
@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	maxFilesPerGroup = 3
-	minCommonPrefix  = 20
+	MaxFilesPerGroup = 3
+	MinCommonPrefix  = 20
 )
 
-func fileCategory(path string) string {
+func FileCategory(path string) string {
 	name := strings.ToLower(filepath.Base(path))
 	ext := filepath.Ext(name)
 
@@ -39,7 +39,7 @@ func fileCategory(path string) string {
 	return "code"
 }
 
-func filterValidFiles(candidateFiles, validFiles []string) []string {
+func FilterValidFiles(candidateFiles, validFiles []string) []string {
 	valid := make(map[string]bool, len(validFiles))
 	for _, f := range validFiles {
 		valid[f] = true
@@ -53,15 +53,15 @@ func filterValidFiles(candidateFiles, validFiles []string) []string {
 	return out
 }
 
-func limitCommitScope(files []string) []string {
-	if len(files) <= maxFilesPerGroup {
+func LimitCommitScope(files []string) []string {
+	if len(files) <= MaxFilesPerGroup {
 		return files
 	}
 
 	cats := make(map[string]string, len(files))
 	counts := make(map[string]int)
 	for _, f := range files {
-		c := fileCategory(f)
+		c := FileCategory(f)
 		cats[f] = c
 		counts[c]++
 	}
@@ -82,13 +82,13 @@ func limitCommitScope(files []string) []string {
 		}
 	}
 
-	if len(same) > maxFilesPerGroup {
-		same = same[:maxFilesPerGroup]
+	if len(same) > MaxFilesPerGroup {
+		same = same[:MaxFilesPerGroup]
 	}
 	return same
 }
 
-func subjectsRelated(a, b string) bool {
+func SubjectsRelated(a, b string) bool {
 	if a == "" || b == "" {
 		return false
 	}
@@ -103,10 +103,10 @@ func subjectsRelated(a, b string) bool {
 		common++
 	}
 
-	return common >= minCommonPrefix
+	return common >= MinCommonPrefix
 }
 
-func mergeGroups(groups []CommitGroup) []CommitGroup {
+func MergeGroups(groups []CommitGroup) []CommitGroup {
 	if len(groups) <= 1 {
 		return groups
 	}
@@ -131,7 +131,7 @@ func mergeGroups(groups []CommitGroup) []CommitGroup {
 				continue
 			}
 			other := strings.ToLower(strings.TrimRight(groups[j].Subject, "."))
-			if subjectsRelated(subj, other) {
+			if SubjectsRelated(subj, other) {
 				used[j] = true
 				for _, f := range groups[j].Files {
 					files[f] = true
@@ -155,7 +155,7 @@ func mergeGroups(groups []CommitGroup) []CommitGroup {
 	return merged
 }
 
-func assignBinaryFiles(groups []CommitGroup, binaryFiles []string) []CommitGroup {
+func AssignBinaryFiles(groups []CommitGroup, binaryFiles []string) []CommitGroup {
 	if len(binaryFiles) == 0 || len(groups) == 0 {
 		return groups
 	}

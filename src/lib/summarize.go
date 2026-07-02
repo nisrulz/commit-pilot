@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"crypto/rand"
@@ -17,12 +17,12 @@ type FileSummary struct {
 	Changes []string `json:"changes"`
 }
 
-func summariesPath() string {
+func SummariesPath() string {
 	home, _ := os.UserHomeDir()
 	date := time.Now().Format("2006-01-02")
 
 	name := "unknown"
-	if out, err := gitRun("rev-parse", "--show-toplevel"); err == nil {
+	if out, err := GitRun("rev-parse", "--show-toplevel"); err == nil {
 		name = filepath.Base(strings.TrimSpace(out))
 	}
 
@@ -35,19 +35,19 @@ func summariesPath() string {
 	return filepath.Join(dir, fmt.Sprintf("git_diff_summaries_%s_%s_%s.json", date, name, hex.EncodeToString(id)))
 }
 
-func summarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (string, error) {
+func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (string, error) {
 	var summaries []FileSummary
 
 	for i, fd := range files {
-		printProcessing(fmt.Sprintf("Summarizing %s (%d/%d)...", fd.Path, i+1, len(files)))
+		PrintProcessing(fmt.Sprintf("Summarizing %s (%d/%d)...", fd.Path, i+1, len(files)))
 
-		prompt := formatPrompt(tmpl, []string{fd.Path}, fd.Diff)
-		result, err := callLLM(prompt, cfg, defaultMaxTokens)
+		prompt := FormatPrompt(tmpl, []string{fd.Path}, fd.Diff)
+		result, err := CallLLM(prompt, cfg, DefaultMaxTokens)
 		if err != nil {
 			return "", fmt.Errorf("summarize %s: %w", fd.Path, err)
 		}
 
-		s := parseSummary(result, fd.Path)
+		s := ParseSummary(result, fd.Path)
 		summaries = append(summaries, s)
 
 		data, _ := json.MarshalIndent(summaries, "", "  ")
@@ -61,15 +61,15 @@ func summarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 	return string(out), nil
 }
 
-func parseSummary(text, file string) FileSummary {
-	raw, err := extractJSON(text)
+func ParseSummary(text, file string) FileSummary {
+	raw, err := ExtractJSON(text)
 	if err != nil {
-		return fallbackSummary(text, file)
+		return FallbackSummary(text, file)
 	}
 
 	var s FileSummary
 	if err := json.Unmarshal(raw, &s); err != nil {
-		return fallbackSummary(string(raw), file)
+		return FallbackSummary(string(raw), file)
 	}
 
 	if s.File == "" {
@@ -79,21 +79,21 @@ func parseSummary(text, file string) FileSummary {
 }
 
 const (
-	maxDumpLen     = 300
-	maxSummaryLen  = 500
+	MaxDumpLen     = 300
+	MaxSummaryLen  = 500
 )
 
-func fallbackSummary(text, file string) FileSummary {
+func FallbackSummary(text, file string) FileSummary {
 	dump := text
-	if len(dump) > maxDumpLen {
-		dump = dump[:maxDumpLen] + "..."
+	if len(dump) > MaxDumpLen {
+		dump = dump[:MaxDumpLen] + "..."
 	}
 	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s, using raw response\n", yellow("!"), file)
 	fmt.Fprintf(os.Stderr, "    raw: %s\n", dump)
 
 	summary := text
-	if len(summary) > maxSummaryLen {
-		summary = summary[:maxSummaryLen] + "..."
+	if len(summary) > MaxSummaryLen {
+		summary = summary[:MaxSummaryLen] + "..."
 	}
 	return FileSummary{File: file, Summary: summary}
 }

@@ -42,17 +42,23 @@ commit-pilot/
 │   ├── setup-ollama.sh   # Ollama model download
 │   └── setup-path.sh     # PATH setup helper
 ├── src/
-│   ├── main.go           # Entry point, orchestration
-│   ├── config.go         # CLI parsing, config resolution
-│   ├── git.go            # Git operations
-│   ├── context.go        # Dynamic context window detection
-│   ├── llm.go            # LLM API client, JSON extraction
-│   ├── prompt.go         # Prompt loading and formatting
-│   ├── commit.go         # AI commit group parsing and execution
-│   ├── grouping.go       # File categorization, grouping, merging logic
-│   ├── tokens.go         # Token estimation, batch splitting
-│   ├── output.go         # Terminal output helpers (colors, formatting)
-│   └── prompt.txt        # Default prompt templates (embedded)
+│   ├── main.go           # CLI entry point (thin wrapper)
+│   └── lib/
+│       ├── main.go       # Orchestration, mode dispatch
+│       ├── config.go     # CLI parsing, config resolution
+│       ├── git.go        # Git operations
+│       ├── context.go    # Dynamic context window detection
+│       ├── llm.go        # LLM API client, JSON extraction
+│       ├── prompt.go     # Prompt loading and formatting
+│       ├── commit.go     # AI commit group parsing and execution
+│       ├── grouping.go   # File categorization, grouping, merging logic
+│       ├── tokens.go     # Token estimation, batch splitting
+│       ├── output.go     # Terminal output helpers (colors, formatting)
+│       ├── pipeline.go   # Summarization & planning pipeline
+│       ├── summarize.go  # Per-file diff summarization
+│       └── prompt.txt    # Default prompt templates (embedded)
+├── tests/
+│   ├── *_test.go         # Unit tests (package lib_test)
 ├── .gitignore
 ├── .goreleaser.yaml
 ├── go.mod
@@ -70,11 +76,24 @@ commit-pilot/
 | `make build` | Build the binary |
 | `make install` | Build and copy to `~/go/bin` |
 | `make vet` | Run static analysis |
+| `make test` | Run unit tests (124 tests) |
 | `make clean` | Remove the binary |
 | `make test-live` | Run live integration test (requires AI provider running) |
 | `make setup-lmstudio` | Download default model for LMStudio |
 | `make setup-ollama` | Download default model for Ollama |
 | `make uninstall` | Remove from `~/go/bin` |
+
+## Unit tests
+
+Tests live in `tests/` and use external test package `lib_test`:
+
+```bash
+make test
+# or
+go test -count=1 ./tests/ -coverpkg=./src/lib/
+```
+
+Coverage is measured for the `src/lib` package. Infrastructure code (HTTP, git, system calls) is exercised through integration tests.
 
 ## Live test
 

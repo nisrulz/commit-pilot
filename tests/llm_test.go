@@ -1,23 +1,24 @@
-package main
+package lib_test
 
 import (
+	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"testing"
 )
 
 func TestExtractJSON_depthLimit(t *testing.T) {
-	depth := maxJSONDepth + 10
+	depth := lib.MaxJSONDepth + 10
 	text := "{"
 	for i := 0; i < depth; i++ {
 		text += "{"
 	}
-	_, err := extractJSON(text)
+	_, err := lib.ExtractJSON(text)
 	if err == nil {
 		t.Fatal("expected error for deeply nested JSON")
 	}
 }
 
 func TestExtractJSON_object(t *testing.T) {
-	raw, err := extractJSON(`{"key": "value"}`)
+	raw, err := lib.ExtractJSON(`{"key": "value"}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -27,7 +28,7 @@ func TestExtractJSON_object(t *testing.T) {
 }
 
 func TestExtractJSON_array(t *testing.T) {
-	raw, err := extractJSON(`[1, 2, 3]`)
+	raw, err := lib.ExtractJSON(`[1, 2, 3]`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestExtractJSON_array(t *testing.T) {
 }
 
 func TestExtractJSON_codeBlock(t *testing.T) {
-	raw, err := extractJSON("Here:\n```json\n{\"key\": \"val\"}\n```")
+	raw, err := lib.ExtractJSON("Here:\n```json\n{\"key\": \"val\"}\n```")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -47,28 +48,28 @@ func TestExtractJSON_codeBlock(t *testing.T) {
 }
 
 func TestExtractJSON_noJSON(t *testing.T) {
-	_, err := extractJSON("just plain text")
+	_, err := lib.ExtractJSON("just plain text")
 	if err == nil {
 		t.Fatal("expected error for text with no JSON")
 	}
 }
 
 func TestExtractJSON_unmatched(t *testing.T) {
-	_, err := extractJSON(`{"key": "val"`)
+	_, err := lib.ExtractJSON(`{"key": "val"`)
 	if err == nil {
 		t.Fatal("expected error for unmatched brackets")
 	}
 }
 
 func TestExtractJSON_empty(t *testing.T) {
-	_, err := extractJSON("")
+	_, err := lib.ExtractJSON("")
 	if err == nil {
 		t.Fatal("expected error for empty input")
 	}
 }
 
 func TestExtractJSON_nested(t *testing.T) {
-	raw, err := extractJSON(`{"a": {"b": [1, 2, {"c": 3}]}}`)
+	raw, err := lib.ExtractJSON(`{"a": {"b": [1, 2, {"c": 3}]}}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,17 +87,17 @@ func TestIsContextLengthError_match(t *testing.T) {
 		"request too large",
 	}
 	for _, kw := range keywords {
-		if !isContextLengthError(kw) {
-			t.Errorf("isContextLengthError(%q) should be true", kw)
+		if !lib.IsContextLengthError(kw) {
+			t.Errorf("lib.IsContextLengthError(%q) should be true", kw)
 		}
 	}
 }
 
 func TestIsContextLengthError_noMatch(t *testing.T) {
-	if isContextLengthError("rate limit exceeded") {
+	if lib.IsContextLengthError("rate limit exceeded") {
 		t.Error("should not match rate limit errors")
 	}
-	if isContextLengthError("") {
+	if lib.IsContextLengthError("") {
 		t.Error("should not match empty string")
 	}
 }

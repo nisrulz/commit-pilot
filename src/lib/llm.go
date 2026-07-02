@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"bytes"
@@ -14,26 +14,26 @@ import (
 	"time"
 )
 
-const maxResponseSize = 1 << 20
+const MaxResponseSize = 1 << 20
 
-type chatMessage struct {
+type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type chatRequest struct {
+type ChatRequest struct {
 	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
+	Messages    []ChatMessage `json:"messages"`
 	Temperature float64       `json:"temperature"`
 	MaxTokens   int           `json:"max_tokens"`
 }
 
-type chatChoice struct {
-	Message chatMessage `json:"message"`
+type ChatChoice struct {
+	Message ChatMessage `json:"message"`
 }
 
-type chatResponse struct {
-	Choices []chatChoice `json:"choices"`
+type ChatResponse struct {
+	Choices []ChatChoice `json:"choices"`
 }
 
 // ContextLengthError indicates the input exceeded the model's context window
@@ -47,16 +47,16 @@ func (e *ContextLengthError) Error() string {
 	return e.Message
 }
 
-const maxJSONDepth = 100
+const MaxJSONDepth = 100
 
-var jsonBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
+var JSONBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
 
-func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
-	warnInsecureHTTP(cfg.APIBase, cfg.APIKey)
+func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
+	WarnInsecureHTTP(cfg.APIBase, cfg.APIKey)
 
-	body, err := json.Marshal(chatRequest{
+	body, err := json.Marshal(ChatRequest{
 		Model: cfg.Model,
-		Messages: []chatMessage{
+		Messages: []ChatMessage{
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.2,
@@ -84,7 +84,7 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
 		return "", fmt.Errorf("read response: %w", err)
 	}
@@ -93,10 +93,10 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 		errMsg := strings.TrimSpace(string(respBody))
 
 		// Detect context length errors from various providers
-		if isContextLengthError(errMsg) {
+		if IsContextLengthError(errMsg) {
 			return "", &ContextLengthError{
 				Message:   fmt.Sprintf("Input too large for model context window (%s)", cfg.Model),
-				Estimated: estimateTokens(prompt),
+				Estimated: EstimateTokens(prompt),
 				Available: cfg.ContextWindow,
 			}
 		}
@@ -104,7 +104,7 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, errMsg)
 	}
 
-	var chatResp chatResponse
+	var chatResp ChatResponse
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
 		return "", fmt.Errorf("parse response: %w", err)
 	}
@@ -116,8 +116,8 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	return chatResp.Choices[0].Message.Content, nil
 }
 
-// isContextLengthError checks if an error message indicates context length exceeded
-func isContextLengthError(errMsg string) bool {
+// IsContextLengthError checks if an error message indicates context length exceeded
+func IsContextLengthError(errMsg string) bool {
 	lower := strings.ToLower(errMsg)
 	contextKeywords := []string{
 		"context length",
@@ -139,7 +139,7 @@ func isContextLengthError(errMsg string) bool {
 	return false
 }
 
-func warnInsecureHTTP(apiBase, apiKey string) {
+func WarnInsecureHTTP(apiBase, apiKey string) {
 	if apiKey == "" {
 		return
 	}
@@ -154,10 +154,10 @@ func warnInsecureHTTP(apiBase, apiKey string) {
 	fmt.Fprintf(os.Stderr, "  ! Warning: sending API key over plain HTTP to %s\n", u.Host)
 }
 
-func extractJSON(text string) (json.RawMessage, error) {
+func ExtractJSON(text string) (json.RawMessage, error) {
 	text = strings.TrimSpace(text)
 
-	if m := jsonBlockRE.FindStringSubmatch(text); m != nil {
+	if m := JSONBlockRE.FindStringSubmatch(text); m != nil {
 		text = strings.TrimSpace(m[1])
 	}
 
@@ -183,8 +183,8 @@ func extractJSON(text string) (json.RawMessage, error) {
 	for i := start; i < len(text); i++ {
 		if text[i] == openChar {
 			depth++
-			if depth > maxJSONDepth {
-				return nil, fmt.Errorf("JSON nesting exceeds max depth %d", maxJSONDepth)
+			if depth > MaxJSONDepth {
+				return nil, fmt.Errorf("JSON nesting exceeds max depth %d", MaxJSONDepth)
 			}
 		} else if text[i] == closeChar {
 			depth--

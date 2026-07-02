@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"encoding/json"
@@ -6,18 +6,18 @@ import (
 	"strings"
 )
 
-func planFromSummaries(tmpl string, cfg Config, summariesJSON string) ([]CommitGroup, error) {
-	printProcessing("Planning commits from summaries...")
+func PlanFromSummaries(tmpl string, cfg Config, summariesJSON string) ([]CommitGroup, error) {
+	PrintProcessing("Planning commits from summaries...")
 
 	r := strings.NewReplacer("{diff}", summariesJSON)
 	prompt := r.Replace(tmpl)
 
-	result, err := callLLM(prompt, cfg, defaultMaxTokens)
+	result, err := CallLLM(prompt, cfg, DefaultMaxTokens)
 	if err != nil {
 		return nil, fmt.Errorf("plan commits: %w", err)
 	}
 
-	raw, err := extractJSON(result)
+	raw, err := ExtractJSON(result)
 	if err != nil {
 		return nil, fmt.Errorf("extract plan: %w", err)
 	}

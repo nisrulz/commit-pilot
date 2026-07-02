@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	_ "embed"
@@ -11,30 +11,30 @@ import (
 //go:embed prompt.txt
 var promptText string
 
-var sectionRE = regexp.MustCompile(`(?m)^=== (\w+) ===\s*$`)
+var SectionRE = regexp.MustCompile(`(?m)^=== (\w+) ===\s*$`)
 
-func loadPrompt(mode Mode, resolved string) string {
+func LoadPrompt(mode Mode, resolved string) string {
 	if resolved != "" {
 		return resolved
 	}
-	return sectionFor(mode)
+	return SectionFor(mode)
 }
 
-func loadSection(name string) string {
-	return sectionByName(name)
+func LoadSection(name string) string {
+	return SectionByName(name)
 }
 
-func sectionFor(mode Mode) string {
+func SectionFor(mode Mode) string {
 	needed := "groups"
 	if mode == ModeSingle {
 		needed = "single"
 	}
-	return sectionByName(needed)
+	return SectionByName(needed)
 }
 
-func sectionByName(name string) string {
-	headers := sectionRE.FindAllStringSubmatch(promptText, -1)
-	parts := sectionRE.Split(promptText, -1)
+func SectionByName(name string) string {
+	headers := SectionRE.FindAllStringSubmatch(promptText, -1)
+	parts := SectionRE.Split(promptText, -1)
 
 	for i, h := range headers {
 		if h[1] == name && i+1 < len(parts) {
@@ -48,19 +48,19 @@ func sectionByName(name string) string {
 	return ""
 }
 
-func formatPrompt(tmpl string, fileList []string, diff string) string {
+func FormatPrompt(tmpl string, fileList []string, diff string) string {
 	fileJSON, err := json.Marshal(fileList)
 	if err != nil {
 		fileJSON = []byte("[]")
 	}
 	r := strings.NewReplacer(
 		"{files}", string(fileJSON),
-		"{diff}", sanitizeDiff(diff),
+		"{diff}", SanitizeDiff(diff),
 	)
 	return r.Replace(tmpl)
 }
 
-func sanitizeDiff(diff string) string {
+func SanitizeDiff(diff string) string {
 	return strings.Map(func(r rune) rune {
 		if r == 0 || (r < 0x20 && r != '\n' && r != '\t') {
 			return -1
@@ -69,7 +69,7 @@ func sanitizeDiff(diff string) string {
 	}, diff)
 }
 
-func formatDiffSection(files []FileDiff) string {
+func FormatDiffSection(files []FileDiff) string {
 	if len(files) == 0 {
 		return ""
 	}

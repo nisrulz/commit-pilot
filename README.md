@@ -20,6 +20,8 @@ Or build from source:
 
 ```bash
 make install
+# or
+go build -o commit-pilot ./src/
 ```
 
 Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
@@ -103,6 +105,12 @@ See [how-it-works.md](docs/how-it-works.md).
 ## Development
 
 See [dev.md](docs/dev.md) for build instructions, project structure, and scripts.
+
+Run tests:
+
+```bash
+make test
+```
 
 ## License
 

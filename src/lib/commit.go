@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ type CommitGroup struct {
 	Files       []string `json:"files"`
 }
 
-func isChunkedBatch(batch []FileDiff) bool {
+func IsChunkedBatch(batch []FileDiff) bool {
 	if len(batch) <= 1 {
 		return false
 	}
@@ -27,9 +27,9 @@ func isChunkedBatch(batch []FileDiff) bool {
 	return true
 }
 
-func groupFromAI(tmpl string, cfg Config, files []FileDiff, maxTokens int) (CommitGroup, error) {
-	if isChunkedBatch(files) {
-		return groupFromAIChunked(tmpl, cfg, files, maxTokens)
+func GroupFromAI(tmpl string, cfg Config, files []FileDiff, maxTokens int) (CommitGroup, error) {
+	if IsChunkedBatch(files) {
+		return GroupFromAIChunked(tmpl, cfg, files, maxTokens)
 	}
 
 	fileList := make([]string, len(files))
@@ -37,16 +37,16 @@ func groupFromAI(tmpl string, cfg Config, files []FileDiff, maxTokens int) (Comm
 		fileList[i] = f.Path
 	}
 
-	prompt := formatPrompt(tmpl, fileList, formatDiffSection(files))
-	result, err := callLLM(prompt, cfg, maxTokens)
+	prompt := FormatPrompt(tmpl, fileList, FormatDiffSection(files))
+	result, err := CallLLM(prompt, cfg, maxTokens)
 	if err != nil {
 		return CommitGroup{}, fmt.Errorf("AI call: %w", err)
 	}
 
-	return parseCommitGroup(result)
+	return ParseCommitGroup(result)
 }
 
-func groupFromAIChunked(tmpl string, cfg Config, chunks []FileDiff, maxTokens int) (CommitGroup, error) {
+func GroupFromAIChunked(tmpl string, cfg Config, chunks []FileDiff, maxTokens int) (CommitGroup, error) {
 	if len(chunks) == 0 {
 		return CommitGroup{}, nil
 	}
@@ -54,18 +54,50 @@ func groupFromAIChunked(tmpl string, cfg Config, chunks []FileDiff, maxTokens in
 	path := chunks[0].Path
 	var groups []CommitGroup
 	for i, ch := range chunks {
-		printProcessing(fmt.Sprintf("Chunk %d/%d of %s", i+1, len(chunks), path))
-		g, err := groupFromAI(tmpl, cfg, []FileDiff{ch}, maxTokens)
+		PrintProcessing(fmt.Sprintf("Chunk %d/%d of %s", i+1, len(chunks), path))
+		g, err := GroupFromAI(tmpl, cfg, []FileDiff{ch}, maxTokens)
 		if err != nil {
 			return CommitGroup{}, err
 		}
 		groups = append(groups, g)
 	}
-	return mergeCommitGroups(groups), nil
+	return MergeCommitGroups(groups), nil
 }
 
-func parseCommitGroup(text string) (CommitGroup, error) {
-	raw, err := extractJSON(text)
+func MergeCommitGroups(groups []CommitGroup) CommitGroup {
+	if len(groups) == 0 {
+		return CommitGroup{}
+	}
+	if len(groups) == 1 {
+		return groups[0]
+	}
+
+	var subjects []string
+	var descriptions []string
+	for _, g := range groups {
+		if g.Subject != "" {
+			subjects = append(subjects, g.Subject)
+		}
+		if g.Description != "" {
+			descriptions = append(descriptions, g.Description)
+		}
+	}
+
+	subject := "chore: update"
+	if len(subjects) > 0 {
+		subject = subjects[0]
+	}
+
+	description := strings.Join(descriptions, "\n\n")
+
+	return CommitGroup{
+		Subject:     subject,
+		Description: description,
+	}
+}
+
+func ParseCommitGroup(text string) (CommitGroup, error) {
+	raw, err := ExtractJSON(text)
 	if err != nil {
 		return CommitGroup{}, fmt.Errorf("extract JSON: %w", err)
 	}
@@ -85,7 +117,7 @@ func parseCommitGroup(text string) (CommitGroup, error) {
 	return CommitGroup{}, fmt.Errorf("parse commit group: expected JSON object with 'subject' field")
 }
 
-func executeCommit(files []string, subject, description string, dryRun bool) bool {
+func ExecuteCommit(files []string, subject, description string, dryRun bool) bool {
 	if len(files) == 0 {
 		return false
 	}
@@ -103,17 +135,17 @@ func executeCommit(files []string, subject, description string, dryRun bool) boo
 
 	if !dryRun {
 		addArgs := append([]string{"add", "--"}, files...)
-		if _, err := gitRun(addArgs...); err != nil {
+		if _, err := GitRun(addArgs...); err != nil {
 			fmt.Fprintf(os.Stderr, "  ! git add failed: %v\n", err)
 			return false
 		}
-		if _, err := gitRun("commit", "-m", subject, "-m", description); err != nil {
+		if _, err := GitRun("commit", "-m", subject, "-m", description); err != nil {
 			fmt.Fprintf(os.Stderr, "  ! git commit failed: %v\n", err)
 			return false
 		}
 	}
 
 	fmt.Println()
-	printCommitSection(subject, description, files, dryRun)
+	PrintCommitSection(subject, description, files, dryRun)
 	return true
 }

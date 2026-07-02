@@ -1,12 +1,13 @@
-package main
+package lib_test
 
 import (
+	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"testing"
 )
 
 func TestParseEstimatedMemory_giB(t *testing.T) {
 	output := "Estimated Total Memory: 12 GiB"
-	v := parseEstimatedMemory(output)
+	v := lib.ParseEstimatedMemory(output)
 	expected := int64(12) * (1 << 30)
 	if v != expected {
 		t.Fatalf("expected %d, got %d", expected, v)
@@ -15,7 +16,7 @@ func TestParseEstimatedMemory_giB(t *testing.T) {
 
 func TestParseEstimatedMemory_miB(t *testing.T) {
 	output := "Estimated Total Memory: 2048 MiB"
-	v := parseEstimatedMemory(output)
+	v := lib.ParseEstimatedMemory(output)
 	expected := int64(2048 * (1 << 20))
 	if v != expected {
 		t.Fatalf("expected %d, got %d", expected, v)
@@ -24,7 +25,7 @@ func TestParseEstimatedMemory_miB(t *testing.T) {
 
 func TestParseEstimatedMemory_giBWithComma(t *testing.T) {
 	output := "Estimated Total Memory: 3,456 MiB"
-	v := parseEstimatedMemory(output)
+	v := lib.ParseEstimatedMemory(output)
 	expected := int64(3456 * (1 << 20))
 	if v != expected {
 		t.Fatalf("expected %d, got %d", expected, v)
@@ -33,14 +34,14 @@ func TestParseEstimatedMemory_giBWithComma(t *testing.T) {
 
 func TestParseEstimatedMemory_noMatch(t *testing.T) {
 	output := "some random output"
-	v := parseEstimatedMemory(output)
+	v := lib.ParseEstimatedMemory(output)
 	if v != -1 {
 		t.Fatalf("expected -1 for no match, got %d", v)
 	}
 }
 
 func TestParseEstimatedMemory_empty(t *testing.T) {
-	v := parseEstimatedMemory("")
+	v := lib.ParseEstimatedMemory("")
 	if v != -1 {
 		t.Fatalf("expected -1 for empty input, got %d", v)
 	}
@@ -48,7 +49,7 @@ func TestParseEstimatedMemory_empty(t *testing.T) {
 
 func TestParseEstimatedMemory_unknownUnit(t *testing.T) {
 	output := "Estimated Total Memory: 100 KB"
-	v := parseEstimatedMemory(output)
+	v := lib.ParseEstimatedMemory(output)
 	if v != -1 {
 		t.Fatalf("expected -1 for unknown unit, got %d", v)
 	}
@@ -67,19 +68,19 @@ func TestParseFloat(t *testing.T) {
 		{"", 0},
 	}
 	for _, tt := range tests {
-		got := parseFloat(tt.input)
+		got := lib.ParseFloat(tt.input)
 		if got != tt.want {
-			t.Fatalf("parseFloat(%q) = %f, want %f", tt.input, got, tt.want)
+			t.Fatalf("lib.ParseFloat(%q) = %f, want %f", tt.input, got, tt.want)
 		}
 	}
 }
 
 func TestModelInfo_serialization(t *testing.T) {
-	mi := &modelInfo{key: "test-model", maxContextLength: 131072}
-	if mi.key != "test-model" {
-		t.Fatalf("expected key 'test-model', got '%s'", mi.key)
+	mi := &lib.ModelInfo{Key: "test-model", MaxContextLength: 131072}
+	if mi.Key != "test-model" {
+		t.Fatalf("expected key 'test-model', got '%s'", mi.Key)
 	}
-	if mi.maxContextLength != 131072 {
-		t.Fatalf("expected maxContextLength 131072, got %d", mi.maxContextLength)
+	if mi.MaxContextLength != 131072 {
+		t.Fatalf("expected maxContextLength 131072, got %d", mi.MaxContextLength)
 	}
 }

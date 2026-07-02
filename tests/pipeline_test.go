@@ -1,6 +1,7 @@
-package main
+package lib_test
 
 import (
+	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestParseSummary_validJSON(t *testing.T) {
 	text := `{"summary": "Added new feature", "changes": ["added handler", "fixed bug"]}`
-	s := parseSummary(text, "main.go")
+	s := lib.ParseSummary(text, "main.go")
 	if s.Summary != "Added new feature" {
 		t.Fatalf("expected summary 'Added new feature', got '%s'", s.Summary)
 	}
@@ -22,7 +23,7 @@ func TestParseSummary_validJSON(t *testing.T) {
 
 func TestParseSummary_jsonBlock(t *testing.T) {
 	text := "Here is the summary:\n```json\n{\"summary\": \"Changed config\", \"changes\": [\"updated port\"]}\n```"
-	s := parseSummary(text, "config.go")
+	s := lib.ParseSummary(text, "config.go")
 	if s.Summary != "Changed config" {
 		t.Fatalf("expected summary 'Changed config', got '%s'", s.Summary)
 	}
@@ -33,7 +34,7 @@ func TestParseSummary_jsonBlock(t *testing.T) {
 
 func TestParseSummary_emptyJSON(t *testing.T) {
 	text := `{"other": "value"}`
-	s := parseSummary(text, "file.go")
+	s := lib.ParseSummary(text, "file.go")
 	if s.File != "file.go" {
 		t.Fatalf("expected file file.go, got '%s'", s.File)
 	}
@@ -41,7 +42,7 @@ func TestParseSummary_emptyJSON(t *testing.T) {
 
 func TestParseSummary_invalidJSON(t *testing.T) {
 	text := "this is not json at all"
-	s := parseSummary(text, "foo.go")
+	s := lib.ParseSummary(text, "foo.go")
 	if s.File != "foo.go" {
 		t.Fatalf("expected file foo.go, got '%s'", s.File)
 	}
@@ -51,7 +52,7 @@ func TestParseSummary_invalidJSON(t *testing.T) {
 }
 
 func TestFallbackSummary_short(t *testing.T) {
-	s := fallbackSummary("short text", "a.go")
+	s := lib.FallbackSummary("short text", "a.go")
 	if s.Summary != "short text" {
 		t.Fatalf("expected 'short text', got '%s'", s.Summary)
 	}
@@ -62,7 +63,7 @@ func TestFallbackSummary_short(t *testing.T) {
 
 func TestFallbackSummary_long(t *testing.T) {
 	long := strings.Repeat("x", 1000)
-	s := fallbackSummary(long, "big.go")
+	s := lib.FallbackSummary(long, "big.go")
 	if len(s.Summary) >= len(long) {
 		t.Fatalf("expected fallback summary to be truncated, got %d chars (original %d)", len(s.Summary), len(long))
 	}
@@ -72,7 +73,7 @@ func TestFallbackSummary_long(t *testing.T) {
 }
 
 func TestFileSummary_jsonRoundTrip(t *testing.T) {
-	original := FileSummary{
+	original := lib.FileSummary{
 		File:    "main.go",
 		Summary: "Refactored handler",
 		Changes: []string{"removed old code", "added new logic"},
@@ -81,7 +82,7 @@ func TestFileSummary_jsonRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
 	}
-	var decoded FileSummary
+	var decoded lib.FileSummary
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
@@ -92,6 +93,6 @@ func TestFileSummary_jsonRoundTrip(t *testing.T) {
 		t.Fatalf("Summary mismatch: %s != %s", decoded.Summary, original.Summary)
 	}
 	if len(decoded.Changes) != len(original.Changes) {
-		t.Fatalf("Changes count mismatch: %d != %d", len(decoded.Changes), len(original.Changes))
+		t.Fatalf("lib.Changes count mismatch: %d != %d", len(decoded.Changes), len(original.Changes))
 	}
 }

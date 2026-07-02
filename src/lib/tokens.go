@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"unicode"
 )
 
-func estimateTokens(text string) int {
+func EstimateTokens(text string) int {
 	if len(text) == 0 {
 		return 0
 	}
@@ -29,17 +29,17 @@ func estimateTokens(text string) int {
 	return int(adjustedTokens) + 1
 }
 
-func estimatePromptTokens(template string, files []FileDiff) int {
-	total := estimateTokens(template)
+func EstimatePromptTokens(template string, files []FileDiff) int {
+	total := EstimateTokens(template)
 
 	fileNames := make([]string, len(files))
 	for i, f := range files {
 		fileNames[i] = f.Path
 	}
-	total += estimateTokens(strings.Join(fileNames, ", ")) + 10
+	total += EstimateTokens(strings.Join(fileNames, ", ")) + 10
 
 	for _, f := range files {
-		total += estimateTokens(f.Path) + estimateTokens(f.Diff) + 10
+		total += EstimateTokens(f.Path) + EstimateTokens(f.Diff) + 10
 	}
 
 	return total
@@ -52,24 +52,24 @@ const (
 	reservedTokens = systemOverhead + responseTokens + safetyMargin
 )
 
-func canFitInContext(template string, files []FileDiff, contextWindow int) bool {
+func CanFitInContext(template string, files []FileDiff, contextWindow int) bool {
 	available := contextWindow - reservedTokens
 	if available <= 0 {
 		return false
 	}
-	estimated := estimatePromptTokens(template, files)
+	estimated := EstimatePromptTokens(template, files)
 	return estimated <= available
 }
 
-func availableDiffTokens(template string, contextWindow int) int {
-	budget := contextWindow - reservedTokens - estimateTokens(template)
+func AvailableDiffTokens(template string, contextWindow int) int {
+	budget := contextWindow - reservedTokens - EstimateTokens(template)
 	if budget < 0 {
 		return 0
 	}
 	return budget
 }
 
-func splitFileIntoChunks(fd FileDiff, diffBudget int) []FileDiff {
+func SplitFileIntoChunks(fd FileDiff, diffBudget int) []FileDiff {
 	if diffBudget <= 0 {
 		return nil
 	}
@@ -94,7 +94,7 @@ func splitFileIntoChunks(fd FileDiff, diffBudget int) []FileDiff {
 	}
 
 	for _, line := range lines {
-		lt := estimateTokens(line) + 1
+		lt := EstimateTokens(line) + 1
 		if tok+lt > perChunkBudget && len(cur) > 0 {
 			flush()
 		}
@@ -105,12 +105,12 @@ func splitFileIntoChunks(fd FileDiff, diffBudget int) []FileDiff {
 	return chunks
 }
 
-func splitFilesIntoBatches(template string, files []FileDiff, contextWindow int) [][]FileDiff {
+func SplitFilesIntoBatches(template string, files []FileDiff, contextWindow int) [][]FileDiff {
 	if len(files) == 0 {
 		return nil
 	}
 
-	if canFitInContext(template, files, contextWindow) {
+	if CanFitInContext(template, files, contextWindow) {
 		return [][]FileDiff{files}
 	}
 
@@ -119,7 +119,7 @@ func splitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 
 	for low <= high {
 		mid := (low + high) / 2
-		if canFitInContext(template, files[:mid], contextWindow) {
+		if CanFitInContext(template, files[:mid], contextWindow) {
 			bestSize = mid
 			low = mid + 1
 		} else {
@@ -127,8 +127,8 @@ func splitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 		}
 	}
 
-	if !canFitInContext(template, files[:1], contextWindow) {
-		diffBudget := availableDiffTokens(template, contextWindow)
+	if !CanFitInContext(template, files[:1], contextWindow) {
+		diffBudget := AvailableDiffTokens(template, contextWindow)
 		if diffBudget <= 0 {
 			fmt.Fprintf(os.Stderr, "  %s Context window too small for any diff content\n", yellow("!"))
 			return [][]FileDiff{files}
@@ -136,7 +136,7 @@ func splitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 
 		var out [][]FileDiff
 		for _, f := range files {
-			chunks := splitFileIntoChunks(f, diffBudget)
+			chunks := SplitFileIntoChunks(f, diffBudget)
 			if len(chunks) > 1 {
 				for _, c := range chunks {
 					out = append(out, []FileDiff{c})
@@ -146,7 +146,7 @@ func splitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 			} else {
 				fmt.Fprintf(os.Stderr, "  %s File %s too large to chunk, sending truncated diff\n",
 					yellow("!"), f.Path)
-				truncated := truncateDiff(f.Diff)
+				truncated := TruncateDiff(f.Diff)
 				out = append(out, []FileDiff{{Path: f.Path, Diff: truncated}})
 			}
 		}
@@ -164,16 +164,16 @@ func splitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 	return batches
 }
 
-const truncateKeepLines = 50
+const TruncateKeepLines = 50
 
-func truncateDiff(diff string) string {
+func TruncateDiff(diff string) string {
 	lines := strings.Split(diff, "\n")
-	if len(lines) <= truncateKeepLines*2+5 {
+	if len(lines) <= TruncateKeepLines*2+5 {
 		return diff
 	}
 
-	head := strings.Join(lines[:truncateKeepLines], "\n")
-	tail := strings.Join(lines[len(lines)-truncateKeepLines:], "\n")
-	marker := fmt.Sprintf("\n[... %d lines truncated ...]\n", len(lines)-truncateKeepLines*2)
+	head := strings.Join(lines[:TruncateKeepLines], "\n")
+	tail := strings.Join(lines[len(lines)-TruncateKeepLines:], "\n")
+	marker := fmt.Sprintf("\n[... %d lines truncated ...]\n", len(lines)-TruncateKeepLines*2)
 	return head + marker + tail
 }
