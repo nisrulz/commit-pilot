@@ -56,6 +56,8 @@ func main() {
 	} else {
 		runAutoMode(changes, cfg, tmpl)
 	}
+
+	checkAndCommitRemainingChanges(cfg, tmpl)
 }
 
 func runSingleMode(changes *Changes, cfg Config, tmpl string) {
@@ -125,37 +127,87 @@ func groupChunkedBatches(batches [][]FileDiff) [][]FileDiff {
 	return result
 }
 
-func runAutoMode(changes *Changes, cfg Config, tmpl string) {
-	remaining := make([]FileDiff, len(changes.FilesWithDiffs))
-	copy(remaining, changes.FilesWithDiffs)
+func checkAndCommitRemainingChanges(cfg Config, tmpl string) {
+	fmt.Println()
+	fmt.Println("  Checking for any remaining uncommitted changes...")
 
-	if len(remaining) == 0 {
+	status, err := gitRun("status", "--porcelain")
+	if err != nil {
+		die("git status failed: %v", err)
+	}
+
+	if status == "" {
+		fmt.Printf("  %s Working directory is clean. Exiting successfully.\n", green("✔"))
 		return
 	}
 
-	var groups []CommitGroup
+	fmt.Printf("  %s Found uncommitted changes. Attempting to group and commit.\n", yellow("⚠️"))
 
-	for len(remaining) > 0 {
-		group, commitFiles := processNextBatch(tmpl, cfg, remaining, &groups)
-		if len(commitFiles) == 0 && group.Subject == "" {
+	remainingChanges, err := getGitChanges()
+	if err != nil {
+		die("git status check failed: %v", err)
+	}
+
+	if len(remainingChanges.AllFiles) == 0 {
+		fmt.Printf("  %s Status check indicated changes, but getGitChanges found none. Exiting.\n", green("✔"))
+		return
+	}
+
+	fmt.Printf("  %s Re-analyzing remaining changes for a final commit...\n", yellow("🧠"))
+
+	runAutoMode(remainingChanges, cfg, tmpl)
+
+	finalStatus, _ := gitRun("status", "--porcelain")
+	if finalStatus == "" {
+		fmt.Printf("  %s Clean Checkout Successful\n", green("✔"))
+	} else {
+		fmt.Fprintf(os.Stderr, "  %s CRITICAL WARNING: Final git status still shows uncommitted changes:\n", red("🚨"))
+		fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), finalStatus)
+		os.Exit(1)
+	}
+}
+
+func runAutoMode(changes *Changes, cfg Config, tmpl string) {
+	files := changes.FilesWithDiffs
+	if len(files) == 0 {
+		return
+	}
+
+	target := summariesPath()
+	fmt.Fprintf(os.Stderr, "  %s Summaries -> %s\n", yellow("~"), target)
+
+	summarizeTmpl := loadSection("summarize")
+	planTmpl := loadSection("plan")
+
+	summariesJSON, err := summarizeChanges(cfg, summarizeTmpl, files, target)
+	if err != nil {
+		if ctxErr, ok := err.(*ContextLengthError); ok {
+			printContextError(ctxErr)
 			return
 		}
+		die("summarization failed: %v", err)
+	}
 
-		committed := make(map[string]bool, len(commitFiles))
-		for _, f := range commitFiles {
-			committed[f] = true
+	groups, err := planFromSummaries(planTmpl, cfg, summariesJSON)
+	if err != nil {
+		if ctxErr, ok := err.(*ContextLengthError); ok {
+			printContextError(ctxErr)
+			return
 		}
-		var next []FileDiff
-		for _, f := range remaining {
-			if !committed[f.Path] {
-				next = append(next, f)
-			}
-		}
-		remaining = next
+		die("planning failed: %v", err)
+	}
+
+	allPaths := allFilePaths(changes)
+	for i, g := range groups {
+		groups[i].Files = limitCommitScope(filterValidFiles(g.Files, allPaths))
 	}
 
 	groups = assignBinaryFiles(groups, changes.BinaryFiles)
 	groups = mergeGroups(groups)
+
+	if len(groups) == 0 {
+		return
+	}
 
 	printStep(fmt.Sprintf("Found %s", pluralize(len(groups), "logical work package")))
 	commitFailed := false
@@ -167,52 +219,6 @@ func runAutoMode(changes *Changes, cfg Config, tmpl string) {
 	if commitFailed {
 		os.Exit(1)
 	}
-}
-
-func processNextBatch(tmpl string, cfg Config, remaining []FileDiff, groups *[]CommitGroup) (CommitGroup, []string) {
-	batches := splitFilesIntoBatches(tmpl, remaining, cfg.ContextWindow)
-	batch := batches[0]
-
-	if len(batches) > 1 {
-		printProcessing(fmt.Sprintf("Processing batch of %s files...", pluralize(len(batch), "")))
-	}
-
-	group, err := groupFromAI(tmpl, cfg, batch, 4096)
-	if err != nil {
-		if ctxErr, ok := err.(*ContextLengthError); ok {
-			printContextError(ctxErr)
-			return CommitGroup{}, nil
-		}
-		die("AI call failed: %v", err)
-	}
-
-	if len(group.Files) == 0 {
-		f := batch[0]
-		*groups = append(*groups, CommitGroup{
-			Subject:     "chore: update",
-			Description: "Update " + f.Path,
-			Files:       []string{f.Path},
-		})
-		return group, []string{f.Path}
-	}
-
-	remainingPaths := make([]string, len(remaining))
-	for i, f := range remaining {
-		remainingPaths[i] = f.Path
-	}
-
-	commitFiles := limitCommitScope(filterValidFiles(group.Files, remainingPaths))
-	if len(commitFiles) == 0 {
-		commitFiles = []string{batch[0].Path}
-	}
-
-	*groups = append(*groups, CommitGroup{
-		Subject:     group.Subject,
-		Description: group.Description,
-		Files:       commitFiles,
-	})
-
-	return group, commitFiles
 }
 
 func mergeCommitGroups(groups []CommitGroup) CommitGroup {

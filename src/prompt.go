@@ -20,17 +20,24 @@ func loadPrompt(mode Mode, resolved string) string {
 	return sectionFor(mode)
 }
 
-func sectionFor(mode Mode) string {
-	headers := sectionRE.FindAllStringSubmatch(promptText, -1)
-	parts := sectionRE.Split(promptText, -1)
+func loadSection(name string) string {
+	return sectionByName(name)
+}
 
+func sectionFor(mode Mode) string {
 	needed := "groups"
 	if mode == ModeSingle {
 		needed = "single"
 	}
+	return sectionByName(needed)
+}
+
+func sectionByName(name string) string {
+	headers := sectionRE.FindAllStringSubmatch(promptText, -1)
+	parts := sectionRE.Split(promptText, -1)
 
 	for i, h := range headers {
-		if h[1] == needed && i+1 < len(parts) {
+		if h[1] == name && i+1 < len(parts) {
 			return strings.TrimSpace(parts[i+1])
 		}
 	}
