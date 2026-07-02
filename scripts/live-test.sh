@@ -15,22 +15,56 @@ cleanup() { rm -rf "$TESTDIR"; }
 die() { echo "  ! $1"; cleanup; exit 1; }
 run_in() { (cd "$1" && "$BINARY" ${2:-} --dry-run 2>&1 || true); }
 
-# --- pre-check: AI model reachability ---
-echo "  • Checking AI endpoint at $API_BASE ..."
-MODELS=$(curl -sf "$API_BASE/models" 2>/dev/null || true)
-if [ -z "$MODELS" ]; then
+# --- pre-check: probe available AI providers ---
+probe_endpoint() {
+  curl -sf "$1/models" >/dev/null 2>&1
+}
+
+PROVIDERS=""
+if [ -n "${OPENAI_BASE_URL:-}" ]; then
+  echo "  • Probing custom endpoint $OPENAI_BASE_URL ..."
+  if probe_endpoint "$OPENAI_BASE_URL"; then
+    PROVIDERS="custom"
+  fi
+else
+  echo "  • Probing available AI providers ..."
+  for entry in "lmstudio|http://localhost:1234/v1|lmstudio" \
+               "ollama|http://localhost:11434/v1|ollama" \
+               "unsloth|http://localhost:8888/v1|unsloth"; do
+    name=$(echo "$entry" | cut -d'|' -f1)
+    url=$(echo "$entry" | cut -d'|' -f2)
+    pname=$(echo "$entry" | cut -d'|' -f3)
+    printf "    %-12s %-30s " "$name" "$url"
+    if probe_endpoint "$url"; then
+      echo "✓"
+      PROVIDERS="$pname"
+      API_BASE="$url"
+      break
+    else
+      echo "✗"
+    fi
+  done
+fi
+
+if [ -z "$PROVIDERS" ]; then
   echo ""
-  echo "  ! Cannot reach the AI API at: $API_BASE"
+  echo "  ! Cannot reach any AI API."
   echo ""
-  echo "    To run the live test, start your AI provider:"
+  echo "    Start one of these providers:"
   echo ""
   echo "    LMStudio (default):"
   echo "      \$ lms server start"
   echo "      \$ lms get gemma-4-e2b-it-qat -y"
+  echo "      URL: http://localhost:1234/v1"
   echo ""
   echo "    Ollama:"
   echo "      \$ ollama serve"
   echo "      \$ ollama pull gemma4:e2b-it-qat"
+  echo "      URL: http://localhost:11434/v1"
+  echo ""
+  echo "    Unsloth Studio:"
+  echo "      \$ unsloth run --model unsloth/Qwen3-1.7B-GGUF -p 8888"
+  echo "      URL: http://localhost:8888/v1"
   echo ""
   echo "    Or set a custom endpoint:"
   echo "      \$ OPENAI_BASE_URL=<url> make test-live"
@@ -38,7 +72,10 @@ if [ -z "$MODELS" ]; then
   cleanup
   exit 1
 fi
-echo "  ✓ AI endpoint reachable"
+
+export OPENAI_BASE_URL="$API_BASE"
+export OPENAI_PROVIDER="$PROVIDERS"
+echo "  ✓ Using provider: $PROVIDERS ($API_BASE)"
 
 # --- build ---
 make -C "$PROJECT_DIR" build || die "build failed"
