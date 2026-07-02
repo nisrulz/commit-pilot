@@ -134,12 +134,12 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool) boo
 	}
 
 	if !dryRun {
-		addArgs := append([]string{"add", "--"}, files...)
-		if _, err := GitRun(addArgs...); err != nil {
+		if _, err := GitRun(append([]string{"add"}, files...)...); err != nil {
 			fmt.Fprintf(os.Stderr, "  ! git add failed: %v\n", err)
 			return false
 		}
-		if _, err := GitRun("commit", "-m", subject, "-m", description); err != nil {
+		commitArgs := append([]string{"commit", "--only", "-m", subject, "-m", description, "--"}, files...)
+		if _, err := GitRun(commitArgs...); err != nil {
 			fmt.Fprintf(os.Stderr, "  ! git commit failed: %v\n", err)
 			return false
 		}
