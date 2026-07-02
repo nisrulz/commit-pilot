@@ -40,18 +40,15 @@ All configuration is done via environment variables.
 
 ## Handling large diffs
 
-Commit Pilot automatically batches large diffs that exceed the model's context window. When processing many files, it will:
+Commit Pilot automatically handles changes that exceed the model's context window:
 
-1. Estimate token count for your changes
-2. Split files into batches that fit the context window
-3. Process each batch sequentially
-4. Show progress: `Processing batch 1/3 (2 files)...`
+1. **Estimates** token count and checks against the context window
+2. **Batches** files into groups that fit within the window
+3. **Splits oversized files** into line-aligned chunks processed across multiple LLM calls
+4. **Merges** chunk results into a single commit message
+5. **Shows progress**: `Processing batch 1/3 (2 files)...`
 
-If you encounter context length errors, increase the window:
-
-```bash
-export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
-```
+When an oversized single file is detected, it shows per-chunk progress: `Chunk 2/5 of big.go`.
 
 ### Dynamic context window (LM Studio)
 
@@ -61,6 +58,14 @@ When using LM Studio, commit-pilot automatically determines the optimal context 
 - Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
 
 No configuration needed — the tool adapts to your hardware.
+
+### Manual override
+
+Set the context window explicitly to override automatic detection:
+
+```bash
+export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
+```
 
 ## Custom prompt
 

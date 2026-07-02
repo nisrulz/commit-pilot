@@ -14,7 +14,24 @@ type CommitGroup struct {
 	Files       []string `json:"files"`
 }
 
+func isChunkedBatch(batch []FileDiff) bool {
+	if len(batch) <= 1 {
+		return false
+	}
+	p := batch[0].Path
+	for _, fd := range batch[1:] {
+		if fd.Path != p {
+			return false
+		}
+	}
+	return true
+}
+
 func groupFromAI(tmpl string, cfg Config, files []FileDiff, maxTokens int) (CommitGroup, error) {
+	if isChunkedBatch(files) {
+		return groupFromAIChunked(tmpl, cfg, files, maxTokens)
+	}
+
 	fileList := make([]string, len(files))
 	for i, f := range files {
 		fileList[i] = f.Path
@@ -27,6 +44,24 @@ func groupFromAI(tmpl string, cfg Config, files []FileDiff, maxTokens int) (Comm
 	}
 
 	return parseCommitGroup(result)
+}
+
+func groupFromAIChunked(tmpl string, cfg Config, chunks []FileDiff, maxTokens int) (CommitGroup, error) {
+	if len(chunks) == 0 {
+		return CommitGroup{}, nil
+	}
+
+	path := chunks[0].Path
+	var groups []CommitGroup
+	for i, ch := range chunks {
+		printProcessing(fmt.Sprintf("Chunk %d/%d of %s", i+1, len(chunks), path))
+		g, err := groupFromAI(tmpl, cfg, []FileDiff{ch}, maxTokens)
+		if err != nil {
+			return CommitGroup{}, err
+		}
+		groups = append(groups, g)
+	}
+	return mergeCommitGroups(groups), nil
 }
 
 func parseCommitGroup(text string) (CommitGroup, error) {

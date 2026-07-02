@@ -31,9 +31,9 @@ commit-pilot --dry-run
 
 When changes exceed the model's context window (default 64k tokens), commit-pilot automatically:
 
-- Splits files into batches
-- Processes each batch sequentially
-- Merges results into final commits
+- **Batches** files into groups that fit within the window
+- **Chunks** oversized single files into line-aligned pieces, processed across multiple LLM calls
+- **Merges** chunk results into a single commit message
 
 ### Dynamic context detection (LM Studio)
 

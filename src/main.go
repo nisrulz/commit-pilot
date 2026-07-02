@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	defaultModel   = "gemma-4-e2b-it-qat"
-	defaultAPIBase = "http://localhost:1234/v1"
+	defaultModel    = "gemma-4-e2b-it-qat"
+	defaultAPIBase  = "http://localhost:1234/v1"
+	defaultMaxTokens = 4096
 )
 
 func main() {
@@ -42,15 +43,12 @@ func main() {
 		fmt.Printf("    (binary: %s)\n", strings.Join(changes.BinaryFiles, ", "))
 	}
 
-	// Check if diffs fit in context window
 	estimatedTokens := estimatePromptTokens(tmpl, changes.FilesWithDiffs)
 	if !canFitInContext(tmpl, changes.FilesWithDiffs, cfg.ContextWindow) {
-		batches := splitFilesIntoBatches(tmpl, changes.FilesWithDiffs, cfg.ContextWindow)
 		fmt.Printf("  %s Large diff detected (%s tokens estimated, %s token context)\n",
 			yellow("!"),
 			formatNumber(estimatedTokens),
 			formatNumber(cfg.ContextWindow))
-		fmt.Printf("    Processing in %d batches\n", len(batches))
 	}
 
 	if cfg.Mode == ModeSingle {
@@ -64,34 +62,13 @@ func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 	printProcessing("Generating commit message...")
 
 	batches := splitFilesIntoBatches(tmpl, changes.FilesWithDiffs, cfg.ContextWindow)
+	grouped := groupChunkedBatches(batches)
 
-	if len(batches) > 1 {
-		var allGroups []CommitGroup
-		for i, batch := range batches {
-			printProcessing(fmt.Sprintf("Processing batch %d/%d (%s)...",
-				i+1, len(batches), pluralize(len(batch), "file")))
+	var allGroups []CommitGroup
+	for i, g := range grouped {
+		printProcessing(fmt.Sprintf("Processing batch %d/%d (%s)...", i+1, len(grouped), batchLabel(g)))
 
-			group, err := groupFromAI(tmpl, cfg, batch, 4096)
-			if err != nil {
-				if ctxErr, ok := err.(*ContextLengthError); ok {
-					printContextError(ctxErr)
-					return
-				}
-				die("AI call failed: %v", err)
-			}
-			allGroups = append(allGroups, group)
-		}
-
-		merged := mergeCommitGroups(allGroups)
-		subject := merged.Subject
-		if subject == "" {
-			subject = "chore: update"
-		}
-		if !executeCommit(allFilePaths(changes), subject, merged.Description, cfg.DryRun) {
-			os.Exit(1)
-		}
-	} else {
-		group, err := groupFromAI(tmpl, cfg, changes.FilesWithDiffs, 4096)
+		group, err := groupFromAI(tmpl, cfg, g, defaultMaxTokens)
 		if err != nil {
 			if ctxErr, ok := err.(*ContextLengthError); ok {
 				printContextError(ctxErr)
@@ -99,13 +76,16 @@ func runSingleMode(changes *Changes, cfg Config, tmpl string) {
 			}
 			die("AI call failed: %v", err)
 		}
-		subject := group.Subject
-		if subject == "" {
-			subject = "chore: update"
-		}
-		if !executeCommit(allFilePaths(changes), subject, group.Description, cfg.DryRun) {
-			os.Exit(1)
-		}
+		allGroups = append(allGroups, group)
+	}
+
+	merged := mergeCommitGroups(allGroups)
+	subject := merged.Subject
+	if subject == "" {
+		subject = "chore: update"
+	}
+	if !executeCommit(allFilePaths(changes), subject, merged.Description, cfg.DryRun) {
+		os.Exit(1)
 	}
 }
 
@@ -115,6 +95,34 @@ func allFilePaths(changes *Changes) []string {
 		files = append(files, f.Path)
 	}
 	return append(files, changes.BinaryFiles...)
+}
+
+func batchLabel(batch []FileDiff) string {
+	if isChunkedBatch(batch) {
+		return fmt.Sprintf("chunk group (%s)", batch[0].Path)
+	}
+	return pluralize(len(batch), "file")
+}
+
+func groupChunkedBatches(batches [][]FileDiff) [][]FileDiff {
+	if len(batches) <= 1 {
+		return batches
+	}
+
+	var result [][]FileDiff
+	current := batches[0]
+
+	for i := 1; i < len(batches); i++ {
+		if len(current) > 0 && len(batches[i]) == 1 &&
+			current[0].Path == batches[i][0].Path {
+			current = append(current, batches[i]...)
+		} else {
+			result = append(result, current)
+			current = batches[i]
+		}
+	}
+	result = append(result, current)
+	return result
 }
 
 func runAutoMode(changes *Changes, cfg Config, tmpl string) {
@@ -215,7 +223,6 @@ func mergeCommitGroups(groups []CommitGroup) CommitGroup {
 		return groups[0]
 	}
 
-	// Combine all subjects and descriptions
 	var subjects []string
 	var descriptions []string
 	for _, g := range groups {
@@ -229,7 +236,6 @@ func mergeCommitGroups(groups []CommitGroup) CommitGroup {
 
 	subject := "chore: update"
 	if len(subjects) > 0 {
-		// Use the first subject as the main one
 		subject = subjects[0]
 	}
 

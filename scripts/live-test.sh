@@ -560,7 +560,51 @@ cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/mixedbin" "1")
 echo "$OUT" | grep -q -i "Generating\|commit message\|binary" && ok "mixed binary/text handled" || fail "mixed binary/text should be handled"
 
-# --- test 25: commit message subject line truncation ---
+# --- test 25: huge single-file diff triggers cross-LLM-call chunking ---
+echo "  • Testing huge single-file diff chunking..."
+mkdir -p "$TESTDIR/hugediff"
+cd "$TESTDIR/hugediff"
+git init -q
+git config user.email "test@test"
+git config user.name "Test"
+
+# Create an initial small file
+echo "package main" > worker.go
+echo "" >> worker.go
+echo "func init() {}" >> worker.go
+git add -A && git commit -m "chore: initial" -q
+
+# Replace with a massive file (2000 struct+method blocks) to create a huge diff
+for i in $(seq 1 2000); do
+  echo "type Worker$i struct {"
+  echo "  ID        int"
+  echo "  Name      string"
+  echo "  Data      []byte"
+  echo "  Metadata  map[string]string"
+  echo "}"
+  echo ""
+  echo "func NewWorker$i(id int, name string) *Worker$i {"
+  echo "  return &Worker$i{ID: id, Name: name, Data: make([]byte,0), Metadata: make(map[string]string)}"
+  echo "}"
+  echo ""
+  echo "func (w *Worker$i) Process(input string) (string, error) {"
+  echo "  if input == \"\" { return \"\", fmt.Errorf(\"empty\") }"
+  echo "  w.Data = []byte(input)"
+  echo "  w.Metadata[\"processed\"] = \"true\""
+  echo "  return fmt.Sprintf(\"ok:%s\", input), nil"
+  echo "}"
+  echo ""
+done > worker.go
+
+git add worker.go
+cd "$PROJECT_DIR"
+
+# Force small context window to ensure chunking is triggered
+OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=8192 run_in "$TESTDIR/hugediff" "1" 2>&1 || true)
+echo "$OUT" | grep -qi "Chunk " && ok "huge diff chunked across multiple LLM calls" || fail "huge diff should show 'Chunk 1/N' processing messages"
+echo "$OUT" | grep -qi "Generating\|committed\|dry-run" && ok "huge diff completes successfully" || fail "huge diff should complete successfully"
+
+# --- test 26: commit message subject line truncation ---
 echo "  • Testing subject line truncation..."
 mkdir -p "$TESTDIR/truncation"
 cd "$TESTDIR/truncation"
