@@ -31,7 +31,8 @@ commit-pilot/
 │   ├── how-it-works.md   # How commit-pilot works
 │   ├── lmstudio.md       # LMStudio setup
 │   ├── ollama.md         # Ollama setup
-│   └── openai.md         # OpenAI setup
+│   ├── openai.md         # OpenAI setup
+│   └── unsloth.md        # Unsloth Studio setup
 ├── img/
 │   ├── github_banner.webp
 │   └── logo.svg
@@ -94,6 +95,13 @@ OPENAI_BASE_URL=http://localhost:11434/v1 make test-live
 ```bash
 OPENAI_BASE_URL=https://api.openai.com/v1 \
   OPENAI_API_KEY=sk-... \
+  make test-live
+```
+
+**Unsloth Studio:**
+```bash
+OPENAI_BASE_URL=http://localhost:8888/v1 \
+  OPENAI_API_KEY=sk-unsloth-... \
   make test-live
 ```
 

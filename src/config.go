@@ -27,12 +27,14 @@ var knownProviders = map[string]string{
 	"ollama":   "http://localhost:11434/v1",
 	"lmstudio": "http://localhost:1234/v1",
 	"openai":   "https://api.openai.com/v1",
+	"unsloth":  "http://localhost:8888/v1",
 }
 
 var providerDefaults = map[string]string{
 	"ollama":   "gemma4:e2b-it-qat",
 	"lmstudio": "gemma-4-e2b-it-qat",
 	"openai":   "gpt-4o-mini",
+	"unsloth":  "unsloth/gemma-4-E4B-it-qat-GGUF",
 }
 
 type rawFlags struct {
@@ -133,7 +135,7 @@ Usage:
   commit-pilot --dry-run                 # preview only
 
 Environment variables:
-  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai
+  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai, unsloth
   OPENAI_MODEL                 Model name (default: gemma-4-e2b-it-qat)
   OPENAI_BASE_URL              API base URL
   OPENAI_API_KEY               API key

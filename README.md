@@ -2,7 +2,7 @@
 
 Never type `git commit -m "fix stuff"` again.
 
-**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, or any OpenAI-compatible API. **Zero telemetry — no data leaves your machine.**
+**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, Unsloth Studio, or any OpenAI-compatible API. **Zero telemetry — no data leaves your machine.**
 
 ![Banner](img/github_banner.webp)
 
@@ -71,6 +71,7 @@ See the provider-specific guides:
 - [LMStudio](docs/lmstudio.md) (default, gemma-4-e2b-it-qat)
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
 - [OpenAI](docs/openai.md) (gpt-4o-mini) — or any OpenAI-compatible API
+- [Unsloth Studio](docs/unsloth.md) (default model)
 
 ## How it works
 
@@ -82,7 +83,7 @@ See [how-it-works.md](docs/how-it-works.md).
 
 ## Requirements
 
-- [LMStudio](https://lmstudio.ai) (default), Ollama, or OpenAI
+- [LMStudio](https://lmstudio.ai) (default), [Ollama](https://ollama.com), [Unsloth Studio](https://unsloth.ai), or OpenAI
 - A git repository
 
 ## Development
