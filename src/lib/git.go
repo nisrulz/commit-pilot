@@ -26,10 +26,10 @@ func GitRun(args ...string) (string, error) {
 			if len(out) > 0 {
 				return string(out), nil
 			}
-			return "", fmt.Errorf("git %s: %s",
-				strings.Join(args, " "), strings.TrimSpace(string(ee.Stderr)))
+			msg := strings.TrimSpace(string(ee.Stderr))
+			return "", fmt.Errorf(msg)
 		}
-		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		return "", fmt.Errorf("git is not installed or not working")
 	}
 	return string(out), nil
 }
@@ -68,7 +68,7 @@ func IsBinaryDiff(diff string) bool {
 func GetGitChanges() (*Changes, error) {
 	_, err := GitRun("rev-parse", "--git-dir")
 	if err != nil {
-		return nil, fmt.Errorf("not a git repository: %w", err)
+		return nil, err
 	}
 
 	staged := GitOutputLines("diff", "--cached", "--name-only")

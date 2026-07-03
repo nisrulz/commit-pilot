@@ -65,28 +65,34 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
-	url := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
+	apiURL := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
 
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	if cfg.APIKey == "" {
+		req.Header.Del("Authorization")
+	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		if _, ok := err.(*url.Error); ok {
+			return "", fmt.Errorf("could not reach provider at %s", cfg.APIBase)
+		}
 		return "", fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
+		return "", fmt.Errorf("could not read AI response")
 	}
 
 	if resp.StatusCode != 200 {
@@ -101,12 +107,18 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 			}
 		}
 
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, errMsg)
+		// Try to extract a clean message from provider JSON error responses
+		clean := cleanAPIError(errMsg)
+		if clean != "" {
+			fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), clean)
+			return "", fmt.Errorf("request failed")
+		}
+		return "", fmt.Errorf("request failed (status %d)", resp.StatusCode)
 	}
 
 	var chatResp ChatResponse
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return "", fmt.Errorf("parse response: %w", err)
+		return "", fmt.Errorf("could not parse AI response")
 	}
 
 	if len(chatResp.Choices) == 0 {
@@ -152,6 +164,19 @@ func WarnInsecureHTTP(apiBase, apiKey string) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "  ! Warning: sending API key over plain HTTP to %s\n", u.Host)
+}
+
+// cleanAPIError extracts a user-facing message from provider JSON error responses
+func cleanAPIError(body string) string {
+	var parsed struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(body), &parsed); err == nil && parsed.Error.Message != "" {
+		return parsed.Error.Message
+	}
+	return ""
 }
 
 func ExtractJSON(text string) (json.RawMessage, error) {
