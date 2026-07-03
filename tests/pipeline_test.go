@@ -96,3 +96,34 @@ func TestFileSummary_jsonRoundTrip(t *testing.T) {
 		t.Fatalf("lib.Changes count mismatch: %d != %d", len(decoded.Changes), len(original.Changes))
 	}
 }
+
+func TestFallbackPlan_withFiles(t *testing.T) {
+	summaries := `[{"file":"a.go","summary":"added foo","changes":["added foo"]},{"file":"b.go","summary":"fixed bar","changes":["fixed bar"]}]`
+	groups := lib.FallbackPlan(summaries)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	if len(groups[0].Files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(groups[0].Files))
+	}
+	if groups[0].Files[0] != "a.go" || groups[0].Files[1] != "b.go" {
+		t.Fatalf("unexpected file list: %v", groups[0].Files)
+	}
+	if groups[0].Subject != "chore: update changes" {
+		t.Fatalf("expected 'chore: update changes', got '%s'", groups[0].Subject)
+	}
+}
+
+func TestFallbackPlan_emptyJSON(t *testing.T) {
+	groups := lib.FallbackPlan(`[]`)
+	if groups != nil {
+		t.Fatal("expected nil for empty summaries")
+	}
+}
+
+func TestFallbackPlan_invalidJSON(t *testing.T) {
+	groups := lib.FallbackPlan(`not json`)
+	if groups != nil {
+		t.Fatal("expected nil for invalid JSON")
+	}
+}
