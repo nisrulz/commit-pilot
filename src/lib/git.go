@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -18,21 +18,24 @@ type Changes struct {
 	BinaryFiles    []string
 }
 
-func gitRun(args ...string) (string, error) {
+func GitRun(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("git %s: %s",
-				strings.Join(args, " "), strings.TrimSpace(string(ee.Stderr)))
+			if len(out) > 0 {
+				return string(out), nil
+			}
+			msg := strings.TrimSpace(string(ee.Stderr))
+			return "", fmt.Errorf(msg)
 		}
-		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		return "", fmt.Errorf("git is not installed or not working")
 	}
 	return string(out), nil
 }
 
-func gitOutputLines(args ...string) []string {
-	out, err := gitRun(args...)
+func GitOutputLines(args ...string) []string {
+	out, err := GitRun(args...)
 	if err != nil {
 		return nil
 	}
@@ -45,15 +48,15 @@ func gitOutputLines(args ...string) []string {
 	return lines
 }
 
-// isBinaryDiff checks if diff content indicates a binary file
-func isBinaryDiff(diff string) bool {
+// IsBinaryDiff checks if diff content indicates a binary file
+func IsBinaryDiff(diff string) bool {
 	// Check for explicit "Binary files" message
 	if strings.Contains(diff, "Binary files") {
 		return true
 	}
 
 	// Check for null bytes which indicate binary content
-	for i := 0; i < len(diff)-1; i++ {
+	for i := 0; i < len(diff); i++ {
 		if diff[i] == 0 {
 			return true
 		}
@@ -62,21 +65,21 @@ func isBinaryDiff(diff string) bool {
 	return false
 }
 
-func getGitChanges() (*Changes, error) {
-	_, err := gitRun("rev-parse", "--git-dir")
+func GetGitChanges() (*Changes, error) {
+	_, err := GitRun("rev-parse", "--git-dir")
 	if err != nil {
-		return nil, fmt.Errorf("not a git repository: %w", err)
+		return nil, err
 	}
 
-	staged := gitOutputLines("diff", "--cached", "--name-only")
+	staged := GitOutputLines("diff", "--cached", "--name-only")
 	hasStaged := len(staged) > 0
 
 	var files []string
 	if hasStaged {
 		files = staged
 	} else {
-		files = gitOutputLines("diff", "--name-only")
-		untracked := gitOutputLines("ls-files", "--others", "--exclude-standard")
+		files = GitOutputLines("diff", "--name-only")
+		untracked := GitOutputLines("ls-files", "--others", "--exclude-standard")
 		seen := make(map[string]bool, len(files))
 		for _, f := range files {
 			seen[f] = true
@@ -96,11 +99,11 @@ func getGitChanges() (*Changes, error) {
 		var raw string
 		var err error
 		if hasStaged {
-			raw, err = gitRun("diff", "--cached", "--", f)
+			raw, err = GitRun("diff", "--cached", "--", f)
 		} else {
-			raw, err = gitRun("diff", "--", f)
+			raw, err = GitRun("diff", "--", f)
 			if raw == "" && err == nil {
-				raw, err = gitRun("diff", "--no-index", "/dev/null", f)
+				raw, err = GitRun("diff", "--no-index", "/dev/null", f)
 			}
 		}
 
@@ -111,7 +114,7 @@ func getGitChanges() (*Changes, error) {
 			continue
 		}
 
-		if isBinaryDiff(raw) {
+		if IsBinaryDiff(raw) {
 			binaryFiles = append(binaryFiles, f)
 		} else {
 			withDiffs = append(withDiffs, FileDiff{Path: f, Diff: raw})

@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -18,45 +18,48 @@ type Config struct {
 	APIBase       string
 	APIKey        string
 	DryRun        bool
+	Cleanup       bool
 	Mode          Mode
 	Prompt        string
 	ContextWindow int
 }
 
-var knownProviders = map[string]string{
+var KnownProviders = map[string]string{
 	"ollama":   "http://localhost:11434/v1",
 	"lmstudio": "http://localhost:1234/v1",
 	"openai":   "https://api.openai.com/v1",
+	"unsloth":  "http://localhost:8888/v1",
 }
 
-var providerDefaults = map[string]string{
+var ProviderDefaults = map[string]string{
 	"ollama":   "gemma4:e2b-it-qat",
 	"lmstudio": "gemma-4-e2b-it-qat",
 	"openai":   "gpt-4o-mini",
+	"unsloth":  "unsloth/gemma-4-E4B-it-qat-GGUF",
 }
 
-type rawFlags struct {
-	Mode   string
-	DryRun bool
+type RawFlags struct {
+	Mode    string
+	DryRun  bool
+	Cleanup bool
 }
 
-func parseArgs(args []string) (rawFlags, bool) {
-	var f rawFlags
-
+func ParseArgs(args []string) (RawFlags, bool) {
+	var f RawFlags
 	if len(args) > 0 && args[0] == "1" {
 		f.Mode = "1"
 		args = args[1:]
 	}
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
+	for _, a := range args {
+		switch a {
 		case "--dry-run":
 			f.DryRun = true
+		case "--cleanup":
+			f.Cleanup = true
 		case "-h", "--help":
 			return f, true
 		}
 	}
-
 	return f, false
 }
 
@@ -64,10 +67,13 @@ const (
 	maxEnvModelLen       = 256
 	maxEnvAPIBaseLen     = 2048
 	maxEnvAPIKeyLen      = 512
-	defaultContextWindow = 65536 // 64k tokens
+	defaultContextWindow = 65536
+	DefaultModel         = "gemma-4-e2b-it-qat"
+	DefaultAPIBase       = "http://localhost:1234/v1"
+	DefaultMaxTokens     = 4096
 )
 
-func resolveConfig(f rawFlags) Config {
+func ResolveConfig(f RawFlags) Config {
 	model := os.Getenv("OPENAI_MODEL")
 	if len(model) > maxEnvModelLen {
 		model = model[:maxEnvModelLen]
@@ -81,21 +87,23 @@ func resolveConfig(f rawFlags) Config {
 		apiKey = apiKey[:maxEnvAPIKeyLen]
 	}
 	provider := os.Getenv("OPENAI_PROVIDER")
-
+	if provider == "" && apiBase == "" {
+		provider = "lmstudio"
+	}
 	if provider != "" {
 		if apiBase == "" {
-			apiBase = knownProviders[provider]
+			apiBase = KnownProviders[provider]
 		}
 		if model == "" {
-			model = providerDefaults[provider]
+			model = ProviderDefaults[provider]
 		}
 	}
 
 	if model == "" {
-		model = defaultModel
+		model = DefaultModel
 	}
 	if apiBase == "" {
-		apiBase = defaultAPIBase
+		apiBase = DefaultAPIBase
 	}
 
 	prompt := os.Getenv("COMMIT_PILOT_PROMPT")
@@ -111,6 +119,11 @@ func resolveConfig(f rawFlags) Config {
 		if v, err := strconv.Atoi(cw); err == nil && v > 0 {
 			contextWindow = v
 		}
+	} else if provider == "lmstudio" {
+		d := DetectContextWindow(apiBase)
+		if d > 0 {
+			contextWindow = d
+		}
 	}
 
 	return Config{
@@ -118,6 +131,7 @@ func resolveConfig(f rawFlags) Config {
 		APIBase:       apiBase,
 		APIKey:        apiKey,
 		DryRun:        f.DryRun,
+		Cleanup:       f.Cleanup,
 		Mode:          Mode(f.Mode),
 		Prompt:        prompt,
 		ContextWindow: contextWindow,
@@ -131,9 +145,10 @@ Usage:
   commit-pilot                           # auto-chunk into logical commits
   commit-pilot 1                         # one commit for all changes
   commit-pilot --dry-run                 # preview only
+  commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:
-  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai
+  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai, unsloth
   OPENAI_MODEL                 Model name (default: gemma-4-e2b-it-qat)
   OPENAI_BASE_URL              API base URL
   OPENAI_API_KEY               API key

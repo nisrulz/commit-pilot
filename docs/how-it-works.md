@@ -11,6 +11,24 @@
 
 The AI groups related file changes into logical commits. Change a bug fix and a refactor in different files? They become separate commits.
 
+## Temp files
+
+In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. These JSON files are used to plan logical commit groupings and can be safely deleted after a run:
+
+```bash
+rm -rf ~/.commit-pilot/tmp
+```
+
+Use `--cleanup` to remove the temp file automatically on success:
+
+```bash
+commit-pilot --cleanup
+```
+
+## Interrupt handling
+
+Press `Ctrl+C` at any point. Commit-pilot exits cleanly with a message and no changes get committed.
+
 ## Single commit mode
 
 Pass `1` to put all changes into one commit:
@@ -27,15 +45,31 @@ Preview without committing:
 commit-pilot --dry-run
 ```
 
+## Cleanup
+
+Remove temp files automatically on success:
+
+```bash
+commit-pilot --cleanup
+```
+
 ## Large diff handling
 
 When changes exceed the model's context window (default 64k tokens), commit-pilot automatically:
 
-- Splits files into batches
-- Processes each batch sequentially
-- Merges results into final commits
+- **Batches** files into groups that fit within the window
+- **Chunks** oversized single files into line-aligned pieces, processed across multiple LLM calls
+- **Merges** chunk results into a single commit message
 
-Configure the context window size:
+### Dynamic context detection (LM Studio)
+
+When using LM Studio with no explicit `COMMIT_PILOT_CONTEXT_WINDOW`, the tool automatically:
+
+1. Reads available system RAM (reserving 5 GB for OS and apps)
+2. Queries LM Studio's REST API for the loaded model's `max_context_length`
+3. Uses `lms load --estimate-only` to binary-search the largest context length that fits
+
+Configure the context window size to override:
 
 ```bash
 export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens

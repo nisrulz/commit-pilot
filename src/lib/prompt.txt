@@ -37,3 +37,38 @@ Files changed: {files}
 
 Changes:
 {diff}
+
+=== summarize ===
+[SYSTEM] You are a code change summarizer. Summarize the following diff concisely.
+
+Return a JSON object with:
+- "summary": one paragraph (max 100 words) describing what changed and why
+- "changes": array of short bullet-point descriptions of specific changes
+
+Respond with ONLY valid JSON, no other text.
+
+File: {files}
+
+Diff:
+{diff}
+
+=== plan ===
+[SYSTEM] You are a git commit planner. Group these file change summaries into logical commits.
+
+Each summary describes changes to one file. Group related files that share the same concern.
+Return ALL commit groups at once as a JSON array of commit objects:
+
+[{"subject": "type(scope): description", "description": "...", "files": ["path/to/file"]}]
+
+STRICT RULES:
+- Group files by shared concern (config, docs, API, tests, infrastructure)
+- Documentation files should NOT be grouped with code
+- Prefer SMALLER, focused commits over large mixed commits
+- Use conventional commit format: type(scope): description
+- Cover ALL files in the input — every file must appear in exactly one commit
+- File paths must match the input exactly
+
+Respond with ONLY valid JSON, no other text.
+
+Summaries:
+{diff}

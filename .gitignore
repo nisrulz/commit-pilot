@@ -1,2 +1,4 @@
 commit-pilot
 .DS_Store
+.temp-test/
+*.out

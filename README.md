@@ -2,7 +2,7 @@
 
 Never type `git commit -m "fix stuff"` again.
 
-**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, or any OpenAI-compatible API. **Zero telemetry — no data leaves your machine.**
+**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, Unsloth Studio, or any OpenAI-compatible API. **Zero telemetry.** No data leaves your machine.
 
 ![Banner](img/github_banner.webp)
 
@@ -20,6 +20,8 @@ Or build from source:
 
 ```bash
 make install
+# or
+go build -o commit-pilot ./src/
 ```
 
 Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
@@ -40,17 +42,39 @@ All configuration is done via environment variables.
 
 ## Handling large diffs
 
-Commit Pilot automatically batches large diffs that exceed the model's context window. When processing many files, it will:
+Commit Pilot automatically handles changes that exceed the model's context window:
 
-1. Estimate token count for your changes
-2. Split files into batches that fit the context window
-3. Process each batch sequentially
-4. Show progress: `Processing batch 1/3 (2 files)...`
+1. **Estimates** token count and checks against the context window
+2. **Batches** files into groups that fit within the window
+3. **Splits oversized files** into line-aligned chunks processed across multiple LLM calls
+4. **Merges** chunk results into a single commit message
+5. **Shows progress**: `Processing batch 1/3 (2 files)...`
 
-If you encounter context length errors, increase the window:
+When an oversized single file is detected, it shows per-chunk progress: `Chunk 2/5 of big.go`.
+
+### Dynamic context window (LM Studio)
+
+When using LM Studio, commit-pilot automatically determines the optimal context window:
+- Checks available system RAM (reserves 5 GB for OS and apps)
+- Queries the loaded model's `max_context_length` via LM Studio's REST API
+- Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
+
+No configuration needed. The tool adapts to your hardware.
+
+### Manual override
+
+Set the context window explicitly to override automatic detection:
 
 ```bash
 export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
+```
+
+## Cleanup
+
+Remove temp files automatically after a successful run:
+
+```bash
+commit-pilot --cleanup
 ```
 
 ## Custom prompt
@@ -71,6 +95,7 @@ See the provider-specific guides:
 - [LMStudio](docs/lmstudio.md) (default, gemma-4-e2b-it-qat)
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
 - [OpenAI](docs/openai.md) (gpt-4o-mini) — or any OpenAI-compatible API
+- [Unsloth Studio](docs/unsloth.md) (default model)
 
 ## How it works
 
@@ -82,12 +107,18 @@ See [how-it-works.md](docs/how-it-works.md).
 
 ## Requirements
 
-- [LMStudio](https://lmstudio.ai) (default), Ollama, or OpenAI
+- [LMStudio](https://lmstudio.ai) (default), [Ollama](https://ollama.com), [Unsloth Studio](https://unsloth.ai), or OpenAI
 - A git repository
 
 ## Development
 
 See [dev.md](docs/dev.md) for build instructions, project structure, and scripts.
+
+Run tests:
+
+```bash
+make test
+```
 
 ## License
 

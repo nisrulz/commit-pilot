@@ -1,7 +1,8 @@
-package main
+package lib
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,26 +14,26 @@ import (
 	"time"
 )
 
-const maxResponseSize = 1 << 20
+const MaxResponseSize = 1 << 20
 
-type chatMessage struct {
+type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type chatRequest struct {
+type ChatRequest struct {
 	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
+	Messages    []ChatMessage `json:"messages"`
 	Temperature float64       `json:"temperature"`
 	MaxTokens   int           `json:"max_tokens"`
 }
 
-type chatChoice struct {
-	Message chatMessage `json:"message"`
+type ChatChoice struct {
+	Message ChatMessage `json:"message"`
 }
 
-type chatResponse struct {
-	Choices []chatChoice `json:"choices"`
+type ChatResponse struct {
+	Choices []ChatChoice `json:"choices"`
 }
 
 // ContextLengthError indicates the input exceeded the model's context window
@@ -46,14 +47,16 @@ func (e *ContextLengthError) Error() string {
 	return e.Message
 }
 
-var jsonBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
+const MaxJSONDepth = 100
 
-func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
-	warnInsecureHTTP(cfg.APIBase, cfg.APIKey)
+var JSONBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
 
-	body, err := json.Marshal(chatRequest{
+func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
+	WarnInsecureHTTP(cfg.APIBase, cfg.APIKey)
+
+	body, err := json.Marshal(ChatRequest{
 		Model: cfg.Model,
-		Messages: []chatMessage{
+		Messages: []ChatMessage{
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.2,
@@ -62,45 +65,60 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
+	apiURL := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
 
-	url := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	if cfg.APIKey == "" {
+		req.Header.Del("Authorization")
+	}
 
-	client := &http.Client{Timeout: 180 * time.Second}
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		if _, ok := err.(*url.Error); ok {
+			return "", fmt.Errorf("could not reach provider at %s", cfg.APIBase)
+		}
 		return "", fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
+		return "", fmt.Errorf("could not read AI response")
 	}
 
 	if resp.StatusCode != 200 {
 		errMsg := strings.TrimSpace(string(respBody))
 
 		// Detect context length errors from various providers
-		if isContextLengthError(errMsg) {
+		if IsContextLengthError(errMsg) {
 			return "", &ContextLengthError{
 				Message:   fmt.Sprintf("Input too large for model context window (%s)", cfg.Model),
-				Estimated: estimateTokens(prompt),
+				Estimated: EstimateTokens(prompt),
 				Available: cfg.ContextWindow,
 			}
 		}
 
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, errMsg)
+		// Try to extract a clean message from provider JSON error responses
+		clean := cleanAPIError(errMsg)
+		if clean != "" {
+			fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), clean)
+			return "", fmt.Errorf("request failed")
+		}
+		return "", fmt.Errorf("request failed (status %d)", resp.StatusCode)
 	}
 
-	var chatResp chatResponse
+	var chatResp ChatResponse
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return "", fmt.Errorf("parse response: %w", err)
+		return "", fmt.Errorf("could not parse AI response")
 	}
 
 	if len(chatResp.Choices) == 0 {
@@ -110,8 +128,8 @@ func callLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	return chatResp.Choices[0].Message.Content, nil
 }
 
-// isContextLengthError checks if an error message indicates context length exceeded
-func isContextLengthError(errMsg string) bool {
+// IsContextLengthError checks if an error message indicates context length exceeded
+func IsContextLengthError(errMsg string) bool {
 	lower := strings.ToLower(errMsg)
 	contextKeywords := []string{
 		"context length",
@@ -133,7 +151,7 @@ func isContextLengthError(errMsg string) bool {
 	return false
 }
 
-func warnInsecureHTTP(apiBase, apiKey string) {
+func WarnInsecureHTTP(apiBase, apiKey string) {
 	if apiKey == "" {
 		return
 	}
@@ -148,10 +166,23 @@ func warnInsecureHTTP(apiBase, apiKey string) {
 	fmt.Fprintf(os.Stderr, "  ! Warning: sending API key over plain HTTP to %s\n", u.Host)
 }
 
-func extractJSON(text string) (json.RawMessage, error) {
+// cleanAPIError extracts a user-facing message from provider JSON error responses
+func cleanAPIError(body string) string {
+	var parsed struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(body), &parsed); err == nil && parsed.Error.Message != "" {
+		return parsed.Error.Message
+	}
+	return ""
+}
+
+func ExtractJSON(text string) (json.RawMessage, error) {
 	text = strings.TrimSpace(text)
 
-	if m := jsonBlockRE.FindStringSubmatch(text); m != nil {
+	if m := JSONBlockRE.FindStringSubmatch(text); m != nil {
 		text = strings.TrimSpace(m[1])
 	}
 
@@ -177,6 +208,9 @@ func extractJSON(text string) (json.RawMessage, error) {
 	for i := start; i < len(text); i++ {
 		if text[i] == openChar {
 			depth++
+			if depth > MaxJSONDepth {
+				return nil, fmt.Errorf("JSON nesting exceeds max depth %d", MaxJSONDepth)
+			}
 		} else if text[i] == closeChar {
 			depth--
 			if depth == 0 {

@@ -256,6 +256,7 @@ a:hover { text-decoration: underline; }
         <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/lmstudio.md">LMStudio</a> (default, gemma-4-e2b-it-qat)</div>
         <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/ollama.md">Ollama</a> (gemma4:e2b-it-qat)</div>
         <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/openai.md">OpenAI</a> (gpt-4o-mini)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/unsloth.md">Unsloth Studio</a> (gemma-4)</div>
       </div>
     </div>
     <div class="prompt-line">
@@ -269,13 +270,14 @@ a:hover { text-decoration: underline; }
         <div class="line">commit-pilot                         <span class="comment"># auto-chunk into logical commits</span></div>
         <div class="line">commit-pilot 1                       <span class="comment"># one commit for all changes</span></div>
         <div class="line">commit-pilot --dry-run               <span class="comment"># preview only</span></div>
+        <div class="line">commit-pilot --cleanup               <span class="comment"># remove temp files on success</span></div>
       </div>
       <div class="md-h3">Providers</div>
       <div class="md-text">Download the model in your provider first, then run commit-pilot.</div>
       <div class="md-text">All configuration is via environment variables:</div>
       <table>
         <tr><th>env var</th><th>description</th><th>default</th></tr>
-        <tr><td>OPENAI_PROVIDER</td><td>Provider: lmstudio, ollama, openai</td><td>lmstudio</td></tr>
+        <tr><td>OPENAI_PROVIDER</td><td>Provider: lmstudio, ollama, openai, unsloth</td><td>lmstudio</td></tr>
         <tr><td>OPENAI_MODEL</td><td>Model name</td><td>gemma-4-e2b-it-qat</td></tr>
         <tr><td>OPENAI_BASE_URL</td><td>API base URL</td><td>http://localhost:1234/v1</td></tr>
         <tr><td>OPENAI_API_KEY</td><td>API key</td><td>—</td></tr>
@@ -284,6 +286,8 @@ a:hover { text-decoration: underline; }
         <div class="line">OPENAI_PROVIDER=lmstudio commit-pilot  <span class="comment"># LMStudio (default)</span></div>
         <div class="line">OPENAI_PROVIDER=ollama OPENAI_MODEL=gemma4:e2b-it-qat commit-pilot</div>
         <div class="line">OPENAI_PROVIDER=openai OPENAI_API_KEY=sk-... commit-pilot</div>
+        <div class="line">OPENAI_PROVIDER=unsloth OPENAI_API_KEY=sk-... commit-pilot</div>
+        <div class="line">COMMIT_PILOT_CONTEXT_WINDOW=131072 commit-pilot  <span class="comment"># 128k context</span></div>
       </div>
       <div class="md-h3">Custom prompt</div>
       <div class="md-text">Override the default prompt with inline text or a file:</div>
@@ -302,14 +306,16 @@ a:hover { text-decoration: underline; }
       <div class="md-text">Environment variable &gt; provider default &gt; built-in default</div>
       <table>
         <tr><th>setting</th><th>env var</th><th>default</th></tr>
-        <tr><td>provider</td><td>OPENAI_PROVIDER</td><td>lmstudio <span class="comment">(lmstudio, ollama, openai)</span></td></tr>
+        <tr><td>provider</td><td>OPENAI_PROVIDER</td><td>lmstudio <span class="comment">(lmstudio, ollama, openai, unsloth)</span></td></tr>
         <tr><td>model</td><td>OPENAI_MODEL</td><td>gemma-4-e2b-it-qat</td></tr>
         <tr><td>api base</td><td>OPENAI_BASE_URL</td><td>http://localhost:1234/v1</td></tr>
         <tr><td>api key</td><td>OPENAI_API_KEY</td><td>—</td></tr>
         <tr><td>mode</td><td><span class="flag">1</span> <span class="comment">(positional arg)</span></td><td>auto-chunk</td></tr>
         <tr><td>dry run</td><td><span class="flag">--dry-run</span></td><td>false</td></tr>
+        <tr><td>cleanup</td><td><span class="flag">--cleanup</span></td><td>false</td></tr>
         <tr><td>prompt</td><td>COMMIT_PILOT_PROMPT</td><td>built-in</td></tr>
         <tr><td>prompt file</td><td>COMMIT_PILOT_PROMPT_FILE</td><td>—</td></tr>
+        <tr><td>context window</td><td>COMMIT_PILOT_CONTEXT_WINDOW</td><td>65536 <span class="comment">(64k tokens)</span></td></tr>
       </table>
       <div class="md-h3">Priority</div>
       <div class="md-text">Environment variable &gt; provider default &gt; built-in default</div>
@@ -323,10 +329,13 @@ a:hover { text-decoration: underline; }
       <div class="md-h2">How it works</div>
       <div class="md-list">
         <div class="md-li"><span class="md-bold">Git scan</span> - collects staged or unstaged changes</div>
-        <div class="md-li"><span class="md-bold">AI analysis</span> - sends diffs to the LLM you configured</div>
-        <div class="md-li"><span class="md-bold">Grouping</span> - AI returns conventional commit messages with file groupings</div>
+        <div class="md-li"><span class="md-bold">Token estimation</span> - checks if diffs fit within the model context window</div>
+        <div class="md-li"><span class="md-bold">Batching</span> - splits large diffs into window-sized batches; oversized files are chunked across multiple LLM calls</div>
+        <div class="md-li"><span class="md-bold">Auto-mode</span> - summarizes each file individually, then plans logical commit groupings</div>
+        <div class="md-li"><span class="md-bold">Single mode</span> - all changes go into one commit</div>
         <div class="md-li"><span class="md-bold">Execution</span> - stages and commits each logical group</div>
       </div>
+      <div class="md-text">With LM Studio, the context window is <span class="md-bold">auto-detected</span> based on available RAM and model limits. No configuration needed.</div>
       <div class="md-text">See <a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/how-it-works.md">how-it-works.md</a> for dry-run and commit output examples.</div>
       <div class="md-code">
         <div class="line"><span class="warn">$</span> commit-pilot</div>

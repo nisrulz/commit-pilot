@@ -1,4 +1,4 @@
-.PHONY: help build install uninstall clean setup setup-lmstudio setup-ollama vet test-live
+.PHONY: help build install uninstall clean setup setup-lmstudio setup-ollama vet test test-cover test-live
 
 BINARY := commit-pilot
 PROVIDER ?= lmstudio
@@ -14,6 +14,8 @@ help:
 	@echo "  setup-lmstudio        Setup LMStudio"
 	@echo "  setup-ollama          Setup Ollama"
 	@echo "  vet                   Run go vet (static analysis)"
+	@echo "  test                  Run unit tests"
+	@echo "  test-cover            Run tests with coverage report"
 	@echo "  test-live             Run live integration test (requires AI provider)"
 
 build:
@@ -29,6 +31,15 @@ install: build
 vet:
 	@go vet ./...
 	@echo "  ✓ go vet passed"
+
+test:
+	@go test -count=1 ./tests/ -coverpkg=./src/lib/
+	@echo "  ✓ all tests passed"
+
+test-cover:
+	@go test -count=1 -coverprofile=/tmp/cov.out -coverpkg=./src/lib/ ./tests/
+	@go tool cover -func=/tmp/cov.out | tail -1
+	@rm /tmp/cov.out
 
 test-live: build
 	@scripts/live-test.sh
