@@ -44,7 +44,7 @@ func DetectContextWindow(apiBase string) int {
 }
 
 func QueryModelInfo(apiBase string) (*ModelInfo, error) {
-	url := fmt.Sprintf("%s/api/v1/models", strings.TrimRight(apiBase, "/"))
+	url := fmt.Sprintf("%s/models", strings.TrimRight(apiBase, "/"))
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func ParseEstimatedMemory(output string) int64 {
 		return -1
 	}
 
-	val := ParseFloat(strings.ReplaceAll(m[1], ",", ""))
+	val := parseFloat(strings.ReplaceAll(m[1], ",", ""))
 	unit := m[2]
 
 	switch unit {
@@ -166,7 +166,7 @@ func GetSystemRAM() (int64, error) {
 	return 0, fmt.Errorf("unable to detect system RAM")
 }
 
-func ParseFloat(s string) float64 {
+func parseFloat(s string) float64 {
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
 }

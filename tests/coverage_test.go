@@ -361,17 +361,7 @@ func TestIsBinaryDiffKnownPatterns(t *testing.T) {
 	}
 }
 
-func TestParseFloatValues(t *testing.T) {
-	if v := lib.ParseFloat("0"); v != 0 {
-		t.Fatalf("expected 0, got %f", v)
-	}
-	if v := lib.ParseFloat("3.14"); v != 3.14 {
-		t.Fatalf("expected 3.14, got %f", v)
-	}
-	if v := lib.ParseFloat("abc"); v != 0 {
-		t.Fatalf("expected 0 for invalid input, got %f", v)
-	}
-}
+
 
 func TestContextLengthErrorFields(t *testing.T) {
 	err := &lib.ContextLengthError{

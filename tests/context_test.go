@@ -55,25 +55,7 @@ func TestParseEstimatedMemory_unknownUnit(t *testing.T) {
 	}
 }
 
-func TestParseFloat(t *testing.T) {
-	tests := []struct {
-		input string
-		want  float64
-	}{
-		{"0", 0},
-		{"1", 1},
-		{"1.5", 1.5},
-		{"100.25", 100.25},
-		{"abc", 0},
-		{"", 0},
-	}
-	for _, tt := range tests {
-		got := lib.ParseFloat(tt.input)
-		if got != tt.want {
-			t.Fatalf("lib.ParseFloat(%q) = %f, want %f", tt.input, got, tt.want)
-		}
-	}
-}
+
 
 func TestModelInfo_serialization(t *testing.T) {
 	mi := &lib.ModelInfo{Key: "test-model", MaxContextLength: 131072}
