@@ -3,10 +3,21 @@ package lib
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 )
 
 func Main() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sig
+		fmt.Println()
+		fmt.Printf("  %s Interrupted — no changes committed.\n", yellow("!"))
+		os.Exit(1)
+	}()
+
 	flags, showHelp := ParseArgs(os.Args[1:])
 	if showHelp {
 		printHelp()
@@ -45,13 +56,24 @@ func Main() {
 			FormatNumber(cfg.ContextWindow))
 	}
 
+	var summariesPaths []string
 	if cfg.Mode == ModeSingle {
 		RunSingleMode(changes, cfg, tmpl)
 	} else {
-		RunAutoMode(changes, cfg, tmpl)
+		summariesPaths = append(summariesPaths, RunAutoMode(changes, cfg, tmpl))
 	}
 
-	CheckAndCommitRemainingChanges(cfg, tmpl)
+	if !cfg.DryRun {
+		summariesPaths = append(summariesPaths, CheckAndCommitRemainingChanges(cfg, tmpl))
+	}
+
+	if cfg.Cleanup {
+		for _, p := range summariesPaths {
+			if p != "" {
+				os.Remove(p)
+			}
+		}
+	}
 }
 
 func RunSingleMode(changes *Changes, cfg Config, tmpl string) {
@@ -66,11 +88,12 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) {
 
 		group, err := GroupFromAI(tmpl, cfg, g, DefaultMaxTokens)
 		if err != nil {
-			if ctxErr, ok := err.(*ContextLengthError); ok {
-				PrintContextError(ctxErr)
-				return
-			}
-			Die("AI call failed: %v", err)
+		if ctxErr, ok := err.(*ContextLengthError); ok {
+			PrintContextError(ctxErr)
+			os.Exit(1)
+			return
+		}
+		Die("AI call failed: %v", err)
 		}
 		allGroups = append(allGroups, group)
 	}
@@ -121,7 +144,7 @@ func GroupChunkedBatches(batches [][]FileDiff) [][]FileDiff {
 	return result
 }
 
-func CheckAndCommitRemainingChanges(cfg Config, tmpl string) {
+func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 	fmt.Println()
 	fmt.Println("  Checking for any remaining uncommitted changes...")
 
@@ -132,7 +155,7 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) {
 
 	if status == "" {
 		fmt.Printf("  %s Working directory is clean. Exiting successfully.\n", green("✔"))
-		return
+		return ""
 	}
 
 	fmt.Printf("  %s Found uncommitted changes. Attempting to group and commit.\n", yellow("⚠️"))
@@ -144,12 +167,12 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) {
 
 	if len(remainingChanges.AllFiles) == 0 {
 		fmt.Printf("  %s Status check indicated changes, but GetGitChanges found none. Exiting.\n", green("✔"))
-		return
+		return ""
 	}
 
 	fmt.Printf("  %s Re-analyzing remaining changes for a final commit...\n", yellow("🧠"))
 
-	RunAutoMode(remainingChanges, cfg, tmpl)
+	path := RunAutoMode(remainingChanges, cfg, tmpl)
 
 	finalStatus, _ := GitRun("status", "--porcelain")
 	if finalStatus == "" {
@@ -159,12 +182,13 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) {
 		fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), finalStatus)
 		os.Exit(1)
 	}
+	return path
 }
 
-func RunAutoMode(changes *Changes, cfg Config, tmpl string) {
+func RunAutoMode(changes *Changes, cfg Config, tmpl string) string {
 	files := changes.FilesWithDiffs
 	if len(files) == 0 {
-		return
+		return ""
 	}
 
 	target := SummariesPath()
@@ -177,7 +201,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) {
 	if err != nil {
 		if ctxErr, ok := err.(*ContextLengthError); ok {
 			PrintContextError(ctxErr)
-			return
+			os.Exit(1)
 		}
 		Die("summarization failed: %v", err)
 	}
@@ -186,7 +210,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) {
 	if err != nil {
 		if ctxErr, ok := err.(*ContextLengthError); ok {
 			PrintContextError(ctxErr)
-			return
+			os.Exit(1)
 		}
 		Die("planning failed: %v", err)
 	}
@@ -200,7 +224,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) {
 	groups = MergeGroups(groups)
 
 	if len(groups) == 0 {
-		return
+		return target
 	}
 
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(groups), "logical work package")))
@@ -213,6 +237,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) {
 	if commitFailed {
 		os.Exit(1)
 	}
+	return target
 }
 
 func PrintContextError(err *ContextLengthError) {
@@ -225,7 +250,6 @@ func PrintContextError(err *ContextLengthError) {
 	fmt.Fprintf(os.Stderr, "    1. Increase context window: export COMMIT_PILOT_CONTEXT_WINDOW=131072\n")
 	fmt.Fprintf(os.Stderr, "    2. Stage fewer files at once\n")
 	fmt.Fprintf(os.Stderr, "    3. Use a model with larger context window\n")
-	os.Exit(1)
 }
 
 func FormatNumber(n int) string {

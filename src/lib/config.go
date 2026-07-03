@@ -18,6 +18,7 @@ type Config struct {
 	APIBase       string
 	APIKey        string
 	DryRun        bool
+	Cleanup       bool
 	Mode          Mode
 	Prompt        string
 	ContextWindow int
@@ -38,8 +39,9 @@ var ProviderDefaults = map[string]string{
 }
 
 type RawFlags struct {
-	Mode   string
-	DryRun bool
+	Mode    string
+	DryRun  bool
+	Cleanup bool
 }
 
 func ParseArgs(args []string) (RawFlags, bool) {
@@ -52,6 +54,8 @@ func ParseArgs(args []string) (RawFlags, bool) {
 		switch a {
 		case "--dry-run":
 			f.DryRun = true
+		case "--cleanup":
+			f.Cleanup = true
 		case "-h", "--help":
 			return f, true
 		}
@@ -127,6 +131,7 @@ func ResolveConfig(f RawFlags) Config {
 		APIBase:       apiBase,
 		APIKey:        apiKey,
 		DryRun:        f.DryRun,
+		Cleanup:       f.Cleanup,
 		Mode:          Mode(f.Mode),
 		Prompt:        prompt,
 		ContextWindow: contextWindow,
@@ -140,6 +145,7 @@ Usage:
   commit-pilot                           # auto-chunk into logical commits
   commit-pilot 1                         # one commit for all changes
   commit-pilot --dry-run                 # preview only
+  commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:
   OPENAI_PROVIDER              Provider: ollama, lmstudio, openai, unsloth
