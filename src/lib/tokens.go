@@ -12,17 +12,16 @@ func EstimateTokens(text string) int {
 		return 0
 	}
 
-	runes := []rune(text)
-	totalRunes := len(runes)
-	baseTokens := totalRunes / 4
-
+	totalRunes := 0
 	codeRunes := 0
-	for _, r := range runes {
+	for _, r := range text {
+		totalRunes++
 		if !unicode.IsLetter(r) && !unicode.IsSpace(r) && !unicode.IsDigit(r) {
 			codeRunes++
 		}
 	}
 
+	baseTokens := totalRunes / 4
 	codeRatio := float64(codeRunes) / float64(totalRunes)
 	adjustedTokens := float64(baseTokens) * (1.0 + codeRatio*0.2)
 
