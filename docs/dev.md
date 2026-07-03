@@ -76,7 +76,7 @@ commit-pilot/
 | `make build` | Build the binary |
 | `make install` | Build and copy to `~/go/bin` |
 | `make vet` | Run static analysis |
-| `make test` | Run unit tests (124 tests) |
+| `make test` | Run unit tests (122 tests) |
 | `make clean` | Remove the binary |
 | `make test-live` | Run live integration test (requires AI provider running) |
 | `make setup-lmstudio` | Download default model for LMStudio |
@@ -93,7 +93,7 @@ make test
 go test -count=1 ./tests/ -coverpkg=./src/lib/
 ```
 
-Coverage is measured for the `src/lib` package. Infrastructure code (HTTP, git, system calls) is exercised through integration tests.
+We measure coverage for the `src/lib` package. Integration tests cover infrastructure code (HTTP, git, system calls).
 
 ## Live test
 

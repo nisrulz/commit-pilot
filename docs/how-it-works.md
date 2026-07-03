@@ -11,6 +11,24 @@
 
 The AI groups related file changes into logical commits. Change a bug fix and a refactor in different files? They become separate commits.
 
+## Temp files
+
+In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. These JSON files are used to plan logical commit groupings and can be safely deleted after a run:
+
+```bash
+rm -rf ~/.commit-pilot/tmp
+```
+
+Use `--cleanup` to remove the temp file automatically on success:
+
+```bash
+commit-pilot --cleanup
+```
+
+## Interrupt handling
+
+Press `Ctrl+C` at any point. Commit-pilot exits cleanly with a message and no changes get committed.
+
 ## Single commit mode
 
 Pass `1` to put all changes into one commit:
@@ -25,6 +43,14 @@ Preview without committing:
 
 ```bash
 commit-pilot --dry-run
+```
+
+## Cleanup
+
+Remove temp files automatically on success:
+
+```bash
+commit-pilot --cleanup
 ```
 
 ## Large diff handling

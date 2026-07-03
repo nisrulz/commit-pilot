@@ -2,7 +2,7 @@
 
 Never type `git commit -m "fix stuff"` again.
 
-**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, Unsloth Studio, or any OpenAI-compatible API. **Zero telemetry — no data leaves your machine.**
+**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, Unsloth Studio, or any OpenAI-compatible API. **Zero telemetry.** No data leaves your machine.
 
 ![Banner](img/github_banner.webp)
 
@@ -59,7 +59,7 @@ When using LM Studio, commit-pilot automatically determines the optimal context 
 - Queries the loaded model's `max_context_length` via LM Studio's REST API
 - Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
 
-No configuration needed — the tool adapts to your hardware.
+No configuration needed. The tool adapts to your hardware.
 
 ### Manual override
 
@@ -67,6 +67,14 @@ Set the context window explicitly to override automatic detection:
 
 ```bash
 export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
+```
+
+## Cleanup
+
+Remove temp files automatically after a successful run:
+
+```bash
+commit-pilot --cleanup
 ```
 
 ## Custom prompt

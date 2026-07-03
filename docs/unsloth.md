@@ -7,7 +7,7 @@ Follow the instructions at [unsloth.ai](https://unsloth.ai) to install Unsloth S
 ## Load a model
 
 ```bash
-unsloth run --model unsloth/Qwen3-1.7B-GGUF -p 8888
+unsloth run --model unsloth/gemma-4-E4B-it-qat-GGUF -p 8888
 ```
 
 Or open the Unsloth Studio UI, load a GGUF model via New Chat, and create an API key from **Settings → API**.
@@ -20,11 +20,11 @@ OPENAI_PROVIDER=unsloth \
   commit-pilot
 ```
 
-If the model name differs from `default`, set it explicitly:
+The default model is `unsloth/gemma-4-E4B-it-qat-GGUF`. To use a different model name, set it explicitly:
 
 ```bash
 OPENAI_PROVIDER=unsloth \
-  OPENAI_MODEL=qwen-local \
+  OPENAI_MODEL=your-model-name \
   OPENAI_API_KEY=sk-unsloth-... \
   commit-pilot
 ```
