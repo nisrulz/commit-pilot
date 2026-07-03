@@ -95,7 +95,7 @@ See the provider-specific guides:
 - [LMStudio](docs/lmstudio.md) (default, gemma-4-e2b-it-qat)
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
 - [OpenAI](docs/openai.md) (gpt-4o-mini) — or any OpenAI-compatible API
-- [Unsloth Studio](docs/unsloth.md) (default model)
+- [Unsloth Studio](docs/unsloth.md) (unsloth/gemma-4-E4B-it-qat-GGUF)
 
 ## How it works
 
