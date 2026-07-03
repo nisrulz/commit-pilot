@@ -27,7 +27,9 @@ func SummariesPath() string {
 	}
 
 	id := make([]byte, 4)
-	rand.Read(id)
+	if _, err := rand.Read(id); err != nil {
+		id = []byte{0, 0, 0, 1}
+	}
 
 	dir := filepath.Join(home, ".commit-pilot", "tmp")
 	os.MkdirAll(dir, 0700)
@@ -51,7 +53,9 @@ func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 		summaries = append(summaries, s)
 
 		data, _ := json.MarshalIndent(summaries, "", "  ")
-		os.WriteFile(dst, data, 0600)
+		if err := os.WriteFile(dst, data, 0600); err != nil {
+			fmt.Fprintf(os.Stderr, "  ! warning: could not write summaries: %v\n", err)
+		}
 	}
 
 	out, err := json.MarshalIndent(summaries, "", "  ")
@@ -90,7 +94,7 @@ func FallbackSummary(text, file string) FileSummary {
 	}
 	// First line only in the error message, full text goes into the summary
 	first := dump
-	if idx := strings.IndexAny(first, "\n."); idx > 0 {
+	if idx := strings.IndexByte(first, '\n'); idx > 0 {
 		first = first[:min(idx, 200)]
 	}
 	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s\n", yellow("!"), file)
