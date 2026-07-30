@@ -100,8 +100,10 @@ export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
 
 ## Output
 
-Use `--quiet` to hide shared progress output. `commit-pilot --list-models --json`
-prints the provider model list as a JSON object for scripts and editor tooling.
+Use `--quiet` to hide nonessential progress output. `--json` prints one result
+object for scripts and editor tooling. It includes the run status and generated
+commit groups. Interactive confirmation remains on stderr so stdout stays valid
+JSON.
 
 ```
   * feat(api): add user search endpoint

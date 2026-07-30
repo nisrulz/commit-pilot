@@ -21,6 +21,9 @@ func Main() {
 	defer stop()
 	cfg.Context = ctx
 	SetOutputMode(cfg.Quiet, cfg.JSON)
+	if cfg.JSON {
+		cfg.Output = os.Stderr
+	}
 	if flags.ListModels {
 		models, err := ListProviderModels(cfg)
 		if err != nil {
@@ -36,6 +39,15 @@ func Main() {
 		return
 	}
 	if flags.Doctor {
+		if cfg.JSON {
+			_, gitErr := GitRun("rev-parse", "--show-toplevel")
+			found, providerErr := CheckProvider(cfg)
+			PrintJSON(map[string]any{"git_repository": gitErr == nil, "model": cfg.Model, "provider_reachable": providerErr == nil, "model_available": found})
+			if gitErr != nil || providerErr != nil || !found {
+				os.Exit(1)
+			}
+			return
+		}
 		if !RunDoctor(cfg) {
 			os.Exit(1)
 		}
@@ -50,7 +62,11 @@ func Main() {
 	}
 
 	if len(changes.AllFiles) == 0 {
-		fmt.Printf("  %s No changes to commit.\n", yellow("\u26a1"))
+		if cfg.JSON {
+			PrintRunResult("no_changes")
+		} else if !cfg.Quiet {
+			fmt.Printf("  %s No changes to commit.\n", yellow("\u26a1"))
+		}
 		return
 	}
 	FilterChanges(changes, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
@@ -62,12 +78,20 @@ func Main() {
 		if err := LintPlan(groups, AllFilePaths(changes)); err != nil {
 			Die("invalid plan: %v", err)
 		}
-		fmt.Println("  Plan is valid.")
+		if cfg.JSON {
+			PrintJSON(map[string]any{"status": "valid"})
+		} else if !cfg.Quiet {
+			fmt.Println("  Plan is valid.")
+		}
 		return
 	}
 
 	if len(changes.FilesWithDiffs) == 0 && len(changes.BinaryFiles) > 0 {
-		fmt.Printf("  %s Only binary files changed \u2014 cannot generate AI commit message.\n", yellow("\u26a1"))
+		if cfg.JSON {
+			PrintRunResult("binary_only")
+		} else if !cfg.Quiet {
+			fmt.Printf("  %s Only binary files changed \u2014 cannot generate AI commit message.\n", yellow("\u26a1"))
+		}
 		return
 	}
 	if cfg.Apply != "" {
@@ -91,12 +115,12 @@ func Main() {
 	}
 
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(changes.AllFiles), "changed file")))
-	if len(changes.BinaryFiles) > 0 {
+	if len(changes.BinaryFiles) > 0 && !IsQuietOutput() {
 		fmt.Printf("    (binary: %s)\n", strings.Join(changes.BinaryFiles, ", "))
 	}
 
 	estimatedTokens := EstimatePromptTokens(tmpl, changes.FilesWithDiffs)
-	if !CanFitInContext(tmpl, changes.FilesWithDiffs, cfg.ContextWindow) {
+	if !CanFitInContext(tmpl, changes.FilesWithDiffs, cfg.ContextWindow) && !IsQuietOutput() {
 		fmt.Printf("  %s Large diff detected (%s tokens estimated, %s token context)\n",
 			yellow("!"),
 			FormatNumber(estimatedTokens),
@@ -123,6 +147,13 @@ func Main() {
 				os.Remove(p)
 			}
 		}
+	}
+	if cfg.JSON {
+		status := "completed"
+		if !committed {
+			status = "cancelled"
+		}
+		PrintRunResult(status)
 	}
 }
 
@@ -199,8 +230,10 @@ func GroupChunkedBatches(batches [][]FileDiff) [][]FileDiff {
 }
 
 func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
-	fmt.Println()
-	fmt.Println("  Checking for any remaining uncommitted changes...")
+	if !IsQuietOutput() {
+		fmt.Println()
+		fmt.Println("  Checking for any remaining uncommitted changes...")
+	}
 
 	status, err := GitRun("status", "--porcelain")
 	if err != nil {
@@ -208,11 +241,15 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 	}
 
 	if status == "" {
-		fmt.Printf("  %s Working directory is clean. Exiting successfully.\n", green("✔"))
+		if !IsQuietOutput() {
+			fmt.Printf("  %s Working directory is clean. Exiting successfully.\n", green("✔"))
+		}
 		return ""
 	}
 
-	fmt.Printf("  %s Found uncommitted changes. Attempting to group and commit.\n", yellow("⚠️"))
+	if !IsQuietOutput() {
+		fmt.Printf("  %s Found uncommitted changes. Attempting to group and commit.\n", yellow("⚠️"))
+	}
 
 	remainingChanges, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil {
@@ -220,11 +257,15 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 	}
 
 	if len(remainingChanges.AllFiles) == 0 {
-		fmt.Printf("  %s Status check indicated changes, but GetGitChanges found none. Exiting.\n", green("✔"))
+		if !IsQuietOutput() {
+			fmt.Printf("  %s Status check indicated changes, but GetGitChanges found none. Exiting.\n", green("✔"))
+		}
 		return ""
 	}
 
-	fmt.Printf("  %s Re-analyzing remaining changes for a final commit...\n", yellow("🧠"))
+	if !IsQuietOutput() {
+		fmt.Printf("  %s Re-analyzing remaining changes for a final commit...\n", yellow("🧠"))
+	}
 
 	path, committed := RunAutoMode(remainingChanges, cfg, tmpl)
 	if !committed {
@@ -233,7 +274,9 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	finalStatus, _ := GitRun("status", "--porcelain")
 	if finalStatus == "" {
-		fmt.Printf("  %s Clean Checkout Successful\n", green("✔"))
+		if !IsQuietOutput() {
+			fmt.Printf("  %s Clean Checkout Successful\n", green("✔"))
+		}
 	} else {
 		fmt.Fprintf(os.Stderr, "  %s CRITICAL WARNING: Final git status still shows uncommitted changes:\n", red("🚨"))
 		fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), finalStatus)
@@ -249,7 +292,9 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	}
 
 	target := SummariesPath()
-	fmt.Fprintf(os.Stderr, "  %s Summaries -> %s\n", yellow("~"), target)
+	if !IsQuietOutput() {
+		fmt.Fprintf(os.Stderr, "  %s Summaries -> %s\n", yellow("~"), target)
+	}
 
 	summarizeTmpl := LoadSection("summarize")
 	planTmpl := ApplyMessagePreferences(LoadSection("plan"), cfg)
@@ -283,7 +328,9 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 		if err := WritePlan(cfg.PlanOut, groups); err != nil {
 			Die("write plan: %v", err)
 		}
-		fmt.Printf("  %s Plan -> %s\n", yellow("~"), cfg.PlanOut)
+		if !IsQuietOutput() {
+			fmt.Printf("  %s Plan -> %s\n", yellow("~"), cfg.PlanOut)
+		}
 	}
 
 	if len(groups) == 0 {

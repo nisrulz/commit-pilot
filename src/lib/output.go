@@ -8,9 +8,29 @@ import (
 	"github.com/fatih/color"
 )
 
-var quietOutput bool
+var (
+	quietOutput   bool
+	jsonOutput    bool
+	commitResults []CommitGroup
+)
 
-func SetOutputMode(quiet, json bool) { quietOutput = quiet || json }
+func SetOutputMode(quiet, json bool) {
+	quietOutput = quiet || json
+	jsonOutput = json
+	commitResults = nil
+}
+
+func IsQuietOutput() bool { return quietOutput }
+
+func IsJSONOutput() bool { return jsonOutput }
+
+func RecordCommit(group CommitGroup) { commitResults = append(commitResults, group) }
+
+func PrintRunResult(status string) {
+	if jsonOutput {
+		PrintJSON(map[string]any{"status": status, "commits": commitResults})
+	}
+}
 
 func PrintJSON(value any) {
 	data, _ := json.Marshal(value)

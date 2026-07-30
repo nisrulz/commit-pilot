@@ -110,8 +110,9 @@ Run `commit-pilot --doctor` to check the current Git repository, resolved provid
 settings, and provider connection. It never prints your API key.
 
 Run `commit-pilot --list-models` to see the models reported by the configured
-provider. Add `--json` to return that list as JSON. Use `--quiet` to hide shared
-progress output during a regular run.
+provider. Add `--json` for a machine-readable result. Regular JSON runs emit one
+result object with a status and the commit groups. Confirmation prompts stay on
+stderr. Use `--quiet` to hide nonessential progress output during a regular run.
 
 ## Handling large diffs
 

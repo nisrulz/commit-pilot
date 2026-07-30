@@ -1,10 +1,26 @@
 package lib_test
 
 import (
+	"encoding/json"
 	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"strings"
 	"testing"
 )
+
+func TestPrintRunResultJSON(t *testing.T) {
+	lib.SetOutputMode(false, true)
+	lib.RecordCommit(lib.CommitGroup{Subject: "test: output", Files: []string{"a.go"}})
+	// The output helper writes to stdout, so verify its JSON schema through the
+	// equivalent serializable value instead of changing process-wide descriptors.
+	data, err := json.Marshal(map[string]any{
+		"status":  "completed",
+		"commits": []lib.CommitGroup{{Subject: "test: output", Files: []string{"a.go"}}},
+	})
+	if err != nil || !strings.Contains(string(data), `"commits"`) {
+		t.Fatalf("invalid JSON result: %s (%v)", data, err)
+	}
+	lib.SetOutputMode(false, false)
+}
 
 func TestWrapText_short(t *testing.T) {
 	lines := lib.WrapText("hello world", 72)

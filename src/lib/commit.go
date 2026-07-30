@@ -149,8 +149,11 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool, max
 		}
 	}
 
-	fmt.Println()
+	if !IsQuietOutput() {
+		fmt.Println()
+	}
 	PrintCommitSection(subject, description, files, dryRun)
+	RecordCommit(CommitGroup{Subject: subject, Description: description, Files: files})
 	return true
 }
 
