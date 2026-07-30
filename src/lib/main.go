@@ -104,12 +104,18 @@ func Main() {
 			Die("invalid plan: %v", err)
 		}
 		if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
+			if cfg.JSON {
+				PrintRunResult("cancelled")
+			}
 			return
 		}
 		for _, group := range groups {
 			if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength) {
 				os.Exit(1)
 			}
+		}
+		if cfg.JSON {
+			PrintRunResult("completed")
 		}
 		return
 	}
