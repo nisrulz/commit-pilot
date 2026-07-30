@@ -1,9 +1,12 @@
 package lib
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Mode string
@@ -19,6 +22,7 @@ type Config struct {
 	APIKey        string
 	DryRun        bool
 	Cleanup       bool
+	Yes           bool
 	Mode          Mode
 	Prompt        string
 	ContextWindow int
@@ -42,20 +46,21 @@ type RawFlags struct {
 	Mode    string
 	DryRun  bool
 	Cleanup bool
+	Yes     bool
 }
 
 func ParseArgs(args []string) (RawFlags, bool) {
 	var f RawFlags
-	if len(args) > 0 && args[0] == "1" {
-		f.Mode = "1"
-		args = args[1:]
-	}
 	for _, a := range args {
 		switch a {
 		case "--dry-run":
 			f.DryRun = true
 		case "--cleanup":
 			f.Cleanup = true
+		case "--single":
+			f.Mode = "1"
+		case "--yes":
+			f.Yes = true
 		case "-h", "--help":
 			return f, true
 		}
@@ -64,6 +69,13 @@ func ParseArgs(args []string) (RawFlags, bool) {
 }
 
 const (
+	ConfigDirEnv          = "COMMIT_PILOT_CONFIG_DIR"
+	TmpDirEnv             = "COMMIT_PILOT_TMP_DIR"
+	configFileName        = "config.env"
+	defaultConfigContents = "# Commit Pilot provider defaults\n" +
+		"OPENAI_PROVIDER=lmstudio\n" +
+		"OPENAI_MODEL=gemma-4-e2b-it-qat\n" +
+		"OPENAI_BASE_URL=http://localhost:1234/v1\n"
 	maxEnvModelLen       = 256
 	maxEnvAPIBaseLen     = 2048
 	maxEnvAPIKeyLen      = 512
@@ -73,12 +85,83 @@ const (
 	DefaultMaxTokens     = 4096
 )
 
+func ConfigDir() string {
+	if dir := os.Getenv(ConfigDirEnv); dir != "" {
+		return dir
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".config", "commit-pilot")
+	}
+	return filepath.Join(home, ".config", "commit-pilot")
+}
+
+func TmpDir() string {
+	if dir := os.Getenv(TmpDirEnv); dir != "" {
+		return dir
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".commit-pilot/tmp"
+	}
+	return filepath.Join(home, ".commit-pilot", "tmp")
+}
+
+func ConfigDefaults() map[string]string {
+	path := filepath.Join(ConfigDir(), configFileName)
+	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(ConfigDir(), 0700)
+		if err == nil {
+			file, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if err == nil {
+				_, err = file.WriteString(defaultConfigContents)
+				file.Close()
+				if err == nil {
+					file, err = os.Open(path)
+				}
+			} else if os.IsExist(err) {
+				file, err = os.Open(path)
+			}
+		}
+	}
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+
+	values := make(map[string]string)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.HasPrefix(line, "#") {
+			continue
+		}
+		switch key = strings.TrimSpace(key); key {
+		case "OPENAI_PROVIDER", "OPENAI_MODEL", "OPENAI_BASE_URL":
+			values[key] = strings.TrimSpace(value)
+		}
+	}
+	return values
+}
+
+func configValue(name string, defaults map[string]string) string {
+	if value, ok := os.LookupEnv(name); ok {
+		return value
+	}
+	return defaults[name]
+}
+
 func ResolveConfig(f RawFlags) Config {
-	model := os.Getenv("OPENAI_MODEL")
+	defaults := ConfigDefaults()
+	model := configValue("OPENAI_MODEL", defaults)
 	if len(model) > maxEnvModelLen {
 		model = model[:maxEnvModelLen]
 	}
-	apiBase := os.Getenv("OPENAI_BASE_URL")
+	apiBase := configValue("OPENAI_BASE_URL", defaults)
 	if len(apiBase) > maxEnvAPIBaseLen {
 		apiBase = apiBase[:maxEnvAPIBaseLen]
 	}
@@ -86,7 +169,7 @@ func ResolveConfig(f RawFlags) Config {
 	if len(apiKey) > maxEnvAPIKeyLen {
 		apiKey = apiKey[:maxEnvAPIKeyLen]
 	}
-	provider := os.Getenv("OPENAI_PROVIDER")
+	provider := configValue("OPENAI_PROVIDER", defaults)
 	if provider == "" && apiBase == "" {
 		provider = "lmstudio"
 	}
@@ -132,6 +215,7 @@ func ResolveConfig(f RawFlags) Config {
 		APIKey:        apiKey,
 		DryRun:        f.DryRun,
 		Cleanup:       f.Cleanup,
+		Yes:           f.Yes,
 		Mode:          Mode(f.Mode),
 		Prompt:        prompt,
 		ContextWindow: contextWindow,
@@ -143,8 +227,9 @@ func printHelp() {
 
 Usage:
   commit-pilot                           # auto-chunk into logical commits
-  commit-pilot 1                         # one commit for all changes
+  commit-pilot --single                  # one commit for all changes
   commit-pilot --dry-run                 # preview only
+  commit-pilot --yes                     # apply proposed commits without prompting
   commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:
@@ -155,5 +240,10 @@ Environment variables:
   COMMIT_PILOT_PROMPT          Custom prompt text (overrides default)
   COMMIT_PILOT_PROMPT_FILE     Path to custom prompt file (overrides default)
   COMMIT_PILOT_CONTEXT_WINDOW  Model context window size in tokens (default: 65536)
+  COMMIT_PILOT_CONFIG_DIR      Directory for configuration (default: ~/.config/commit-pilot)
+  COMMIT_PILOT_TMP_DIR         Directory for temporary summaries (default: ~/.commit-pilot/tmp)
+
+Config file:
+  $COMMIT_PILOT_CONFIG_DIR/config.env    Optional provider/model defaults
 `)
 }

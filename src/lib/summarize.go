@@ -18,7 +18,6 @@ type FileSummary struct {
 }
 
 func SummariesPath() string {
-	home, _ := os.UserHomeDir()
 	date := time.Now().Format("2006-01-02")
 
 	name := "unknown"
@@ -31,7 +30,7 @@ func SummariesPath() string {
 		id = []byte{0, 0, 0, 1}
 	}
 
-	dir := filepath.Join(home, ".commit-pilot", "tmp")
+	dir := TmpDir()
 	os.MkdirAll(dir, 0700)
 
 	return filepath.Join(dir, fmt.Sprintf("git_diff_summaries_%s_%s_%s.json", date, name, hex.EncodeToString(id)))
@@ -83,8 +82,8 @@ func ParseSummary(text, file string) FileSummary {
 }
 
 const (
-	MaxDumpLen     = 300
-	MaxSummaryLen  = 500
+	MaxDumpLen    = 300
+	MaxSummaryLen = 500
 )
 
 func FallbackSummary(text, file string) FileSummary {

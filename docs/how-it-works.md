@@ -13,10 +13,27 @@ The AI groups related file changes into logical commits. Change a bug fix and a 
 
 ## Temp files
 
-In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. These JSON files are used to plan logical commit groupings and can be safely deleted after a run:
+In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. These JSON files are used to plan logical commit groupings and can be safely deleted after a run. Set `COMMIT_PILOT_TMP_DIR` to store them elsewhere:
 
 ```bash
+COMMIT_PILOT_TMP_DIR=/path/to/commit-pilot-tmp commit-pilot
 rm -rf ~/.commit-pilot/tmp
+```
+
+Configuration belongs separately in `~/.config/commit-pilot/`. Set
+`COMMIT_PILOT_CONFIG_DIR` to use another configuration directory. Commit Pilot
+loads provider, model, and API-base defaults from `config.env` in that directory;
+creates the file with the LM Studio defaults when absent, and gives environment
+variables precedence. This directory is not used for temporary summaries.
+
+## Commit confirmation
+
+Before committing, Commit Pilot prints the proposed commit subjects and files, then
+asks for confirmation. Use `--yes` when running non-interactively or when you want
+to apply the plan without a prompt:
+
+```bash
+commit-pilot --yes
 ```
 
 Use `--cleanup` to remove the temp file automatically on success:
@@ -31,10 +48,10 @@ Press `Ctrl+C` at any point. Commit-pilot exits cleanly with a message and no ch
 
 ## Single commit mode
 
-Pass `1` to put all changes into one commit:
+Pass `--single` to put all changes into one commit:
 
 ```bash
-commit-pilot 1
+commit-pilot --single
 ```
 
 ## Dry run

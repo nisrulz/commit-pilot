@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -147,5 +148,26 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool) boo
 
 	fmt.Println()
 	PrintCommitSection(subject, description, files, dryRun)
+	return true
+}
+
+func ConfirmCommitPlan(groups []CommitGroup, cfg Config) bool {
+	fmt.Println()
+	fmt.Println("  Proposed commit plan:")
+	for i, group := range groups {
+		fmt.Printf("    %d. %s\n", i+1, group.Subject)
+		fmt.Printf("       Files: %s\n", strings.Join(group.Files, ", "))
+	}
+
+	if cfg.DryRun || cfg.Yes {
+		return true
+	}
+
+	fmt.Print("  Apply this plan? [y/N] ")
+	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil || !strings.EqualFold(strings.TrimSpace(answer), "y") {
+		fmt.Println("  No commits created.")
+		return false
+	}
 	return true
 }

@@ -28,7 +28,7 @@ Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
 
 ## Configuration
 
-All configuration is done via environment variables.
+Configuration can be supplied through environment variables or a local config file.
 
 | Setting | Env var | Default |
 |---|---|---|
@@ -39,6 +39,38 @@ All configuration is done via environment variables.
 | Prompt text | `COMMIT_PILOT_PROMPT` | built-in |
 | Prompt file | `COMMIT_PILOT_PROMPT_FILE` | — |
 | Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
+| Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
+| Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
+
+Temporary AI summaries and configuration use separate locations. `COMMIT_PILOT_TMP_DIR`
+controls the disposable summaries created in auto mode. `COMMIT_PILOT_CONFIG_DIR`
+contains reusable provider defaults.
+
+For reusable provider defaults, create `config.env` in `COMMIT_PILOT_CONFIG_DIR`:
+
+```dotenv
+OPENAI_PROVIDER=ollama
+OPENAI_MODEL=gemma4:e2b-it-qat
+OPENAI_BASE_URL=http://localhost:11434/v1
+```
+
+If the file does not exist, Commit Pilot creates it with the default LM Studio
+provider, model, and API base on its first run.
+
+Values set in the environment take precedence over this file. API keys stay
+environment-only.
+
+## Review the commit plan
+
+Before writing commits, Commit Pilot shows the proposed subjects and files and asks
+for confirmation. Use `--yes` for non-interactive or fully autonomous runs:
+
+```bash
+commit-pilot --yes
+commit-pilot --single --yes
+```
+
+Use `--single` to create one commit for all changes.
 
 ## Handling large diffs
 

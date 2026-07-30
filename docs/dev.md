@@ -16,7 +16,7 @@ Run directly after build:
 
 ```bash
 make build && ./commit-pilot --dry-run
-make build && ./commit-pilot 1 --dry-run
+make build && ./commit-pilot --single --dry-run
 ```
 
 ## Project structure

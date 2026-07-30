@@ -1,6 +1,8 @@
 package lib_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -118,7 +120,7 @@ func TestParseArgs(t *testing.T) {
 		t.Fatal("expected showHelp=true for -h")
 	}
 
-	flags, showHelp := lib.ParseArgs([]string{"1", "--dry-run"})
+	flags, showHelp := lib.ParseArgs([]string{"--single", "--dry-run"})
 	if showHelp {
 		t.Fatal("expected showHelp=false")
 	}
@@ -127,6 +129,11 @@ func TestParseArgs(t *testing.T) {
 	}
 	if !flags.DryRun {
 		t.Fatal("expected DryRun=true")
+	}
+
+	flags, showHelp = lib.ParseArgs([]string{"--single", "--yes"})
+	if showHelp || string(flags.Mode) != "1" || !flags.Yes {
+		t.Fatalf("expected --single and --yes to be parsed, got %+v", flags)
 	}
 }
 
@@ -227,12 +234,84 @@ func TestLoadPromptAndSections(t *testing.T) {
 }
 
 func TestSummariesPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(lib.TmpDirEnv, tmpDir)
 	path := lib.SummariesPath()
-	if !strings.Contains(path, ".commit-pilot") {
-		t.Fatal("expected path to contain .commit-pilot")
+	if !strings.HasPrefix(path, tmpDir) {
+		t.Fatalf("expected path %q to be inside temporary directory %q", path, tmpDir)
 	}
 	if !strings.Contains(path, "git_diff_summaries") {
 		t.Fatal("expected path to contain git_diff_summaries")
+	}
+}
+
+func TestConfigDir(t *testing.T) {
+	t.Setenv(lib.ConfigDirEnv, "/tmp/commit-pilot")
+	if got := lib.ConfigDir(); got != "/tmp/commit-pilot" {
+		t.Fatalf("ConfigDir() = %q, want environment value", got)
+	}
+}
+
+func TestConfigDirDefault(t *testing.T) {
+	t.Setenv(lib.ConfigDirEnv, "")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("user home directory unavailable")
+	}
+	if got, want := lib.ConfigDir(), filepath.Join(home, ".config", "commit-pilot"); got != want {
+		t.Fatalf("ConfigDir() = %q, want %q", got, want)
+	}
+}
+
+func TestTmpDir(t *testing.T) {
+	t.Setenv(lib.TmpDirEnv, "/tmp/commit-pilot")
+	if got := lib.TmpDir(); got != "/tmp/commit-pilot" {
+		t.Fatalf("TmpDir() = %q, want environment value", got)
+	}
+}
+
+func TestTmpDirDefault(t *testing.T) {
+	t.Setenv(lib.TmpDirEnv, "")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("user home directory unavailable")
+	}
+	if got, want := lib.TmpDir(), filepath.Join(home, ".commit-pilot", "tmp"); got != want {
+		t.Fatalf("TmpDir() = %q, want %q", got, want)
+	}
+}
+
+func TestConfigDefaults(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	content := "# local defaults\nOPENAI_PROVIDER=ollama\nOPENAI_MODEL=qwen\nOPENAI_BASE_URL=http://localhost:11434/v1\nIGNORED=value\n"
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	defaults := lib.ConfigDefaults()
+	if defaults["OPENAI_PROVIDER"] != "ollama" || defaults["OPENAI_MODEL"] != "qwen" {
+		t.Fatalf("unexpected config defaults: %#v", defaults)
+	}
+	if _, ok := defaults["IGNORED"]; ok {
+		t.Fatal("unsupported configuration key should be ignored")
+	}
+}
+
+func TestConfigDefaultsCreatesFile(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+
+	defaults := lib.ConfigDefaults()
+	if defaults["OPENAI_PROVIDER"] != "lmstudio" {
+		t.Fatalf("expected LM Studio default, got %#v", defaults)
+	}
+	data, err := os.ReadFile(filepath.Join(configDir, "config.env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "OPENAI_MODEL=gemma-4-e2b-it-qat") {
+		t.Fatalf("unexpected generated config: %s", data)
 	}
 }
 
@@ -360,8 +439,6 @@ func TestIsBinaryDiffKnownPatterns(t *testing.T) {
 		t.Fatal("expected false for plain text")
 	}
 }
-
-
 
 func TestContextLengthErrorFields(t *testing.T) {
 	err := &lib.ContextLengthError{

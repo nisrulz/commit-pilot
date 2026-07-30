@@ -57,17 +57,20 @@ func Main() {
 	}
 
 	var summariesPaths []string
+	committed := true
 	if cfg.Mode == ModeSingle {
-		RunSingleMode(changes, cfg, tmpl)
+		committed = RunSingleMode(changes, cfg, tmpl)
 	} else {
-		summariesPaths = append(summariesPaths, RunAutoMode(changes, cfg, tmpl))
+		var path string
+		path, committed = RunAutoMode(changes, cfg, tmpl)
+		summariesPaths = append(summariesPaths, path)
 	}
 
-	if !cfg.DryRun {
+	if !cfg.DryRun && committed {
 		summariesPaths = append(summariesPaths, CheckAndCommitRemainingChanges(cfg, tmpl))
 	}
 
-	if cfg.Cleanup {
+	if cfg.Cleanup && committed {
 		for _, p := range summariesPaths {
 			if p != "" {
 				os.Remove(p)
@@ -76,7 +79,7 @@ func Main() {
 	}
 }
 
-func RunSingleMode(changes *Changes, cfg Config, tmpl string) {
+func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
 	PrintProcessing("Generating commit message...")
 
 	batches := SplitFilesIntoBatches(tmpl, changes.FilesWithDiffs, cfg.ContextWindow)
@@ -88,12 +91,12 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) {
 
 		group, err := GroupFromAI(tmpl, cfg, g, DefaultMaxTokens)
 		if err != nil {
-		if ctxErr, ok := err.(*ContextLengthError); ok {
-			PrintContextError(ctxErr)
-			os.Exit(1)
-			return
-		}
-		Die("AI call failed: %v", err)
+			if ctxErr, ok := err.(*ContextLengthError); ok {
+				PrintContextError(ctxErr)
+				os.Exit(1)
+				return false
+			}
+			Die("AI call failed: %v", err)
 		}
 		allGroups = append(allGroups, group)
 	}
@@ -103,9 +106,13 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) {
 	if subject == "" {
 		subject = "chore: update"
 	}
+	if !ConfirmCommitPlan([]CommitGroup{{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}}, cfg) {
+		return false
+	}
 	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun) {
 		os.Exit(1)
 	}
+	return true
 }
 
 func AllFilePaths(changes *Changes) []string {
@@ -172,7 +179,10 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	fmt.Printf("  %s Re-analyzing remaining changes for a final commit...\n", yellow("🧠"))
 
-	path := RunAutoMode(remainingChanges, cfg, tmpl)
+	path, committed := RunAutoMode(remainingChanges, cfg, tmpl)
+	if !committed {
+		return path
+	}
 
 	finalStatus, _ := GitRun("status", "--porcelain")
 	if finalStatus == "" {
@@ -185,10 +195,10 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 	return path
 }
 
-func RunAutoMode(changes *Changes, cfg Config, tmpl string) string {
+func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	files := changes.FilesWithDiffs
 	if len(files) == 0 {
-		return ""
+		return "", true
 	}
 
 	target := SummariesPath()
@@ -224,10 +234,13 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) string {
 	groups = MergeGroups(groups)
 
 	if len(groups) == 0 {
-		return target
+		return target, true
 	}
 
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(groups), "logical work package")))
+	if !ConfirmCommitPlan(groups, cfg) {
+		return target, false
+	}
 	commitFailed := false
 	for _, g := range groups {
 		if !ExecuteCommit(g.Files, g.Subject, g.Description, cfg.DryRun) {
@@ -237,7 +250,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) string {
 	if commitFailed {
 		os.Exit(1)
 	}
-	return target
+	return target, true
 }
 
 func PrintContextError(err *ContextLengthError) {
