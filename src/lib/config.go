@@ -47,6 +47,7 @@ type RawFlags struct {
 	DryRun  bool
 	Cleanup bool
 	Yes     bool
+	Doctor  bool
 }
 
 func ParseArgs(args []string) (RawFlags, bool) {
@@ -61,6 +62,8 @@ func ParseArgs(args []string) (RawFlags, bool) {
 			f.Mode = "1"
 		case "--yes":
 			f.Yes = true
+		case "--doctor":
+			f.Doctor = true
 		case "-h", "--help":
 			return f, true
 		}
@@ -230,6 +233,7 @@ Usage:
   commit-pilot --single                  # one commit for all changes
   commit-pilot --dry-run                 # preview only
   commit-pilot --yes                     # apply proposed commits without prompting
+  commit-pilot --doctor                  # check Git and provider setup
   commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:

@@ -72,6 +72,11 @@ commit-pilot --single --yes
 
 Use `--single` to create one commit for all changes.
 
+## Check your setup
+
+Run `commit-pilot --doctor` to check the current Git repository, resolved provider
+settings, and provider connection. It never prints your API key.
+
 ## Handling large diffs
 
 Commit Pilot automatically handles changes that exceed the model's context window:

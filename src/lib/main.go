@@ -25,6 +25,12 @@ func Main() {
 	}
 
 	cfg := ResolveConfig(flags)
+	if flags.Doctor {
+		if !RunDoctor(cfg) {
+			os.Exit(1)
+		}
+		return
+	}
 
 	tmpl := LoadPrompt(cfg.Mode, cfg.Prompt)
 

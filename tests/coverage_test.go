@@ -135,6 +135,11 @@ func TestParseArgs(t *testing.T) {
 	if showHelp || string(flags.Mode) != "1" || !flags.Yes {
 		t.Fatalf("expected --single and --yes to be parsed, got %+v", flags)
 	}
+
+	flags, showHelp = lib.ParseArgs([]string{"--doctor"})
+	if showHelp || !flags.Doctor {
+		t.Fatalf("expected --doctor to be parsed, got %+v", flags)
+	}
 }
 
 func TestAllFilePathsEmpty(t *testing.T) {
