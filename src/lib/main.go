@@ -43,6 +43,7 @@ func Main() {
 		fmt.Printf("  %s No changes to commit.\n", yellow("\u26a1"))
 		return
 	}
+	changes.FilesWithDiffs = FilterFiles(changes.FilesWithDiffs, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
 
 	if len(changes.FilesWithDiffs) == 0 && len(changes.BinaryFiles) > 0 {
 		fmt.Printf("  %s Only binary files changed \u2014 cannot generate AI commit message.\n", yellow("\u26a1"))

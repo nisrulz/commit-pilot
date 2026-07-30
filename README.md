@@ -77,6 +77,10 @@ Use `--single` to create one commit for all changes.
 
 Use `--plan-out plan.json` to save a generated plan for review. Edit the JSON, then run `commit-pilot --apply plan.json` to validate it against the current changes and apply it.
 
+## Control files sent to the model
+
+Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Files that look like secrets, keys, or certificates are skipped unless you pass `--include-sensitive`.
+
 ## Check your setup
 
 Run `commit-pilot --doctor` to check the current Git repository, resolved provider

@@ -18,21 +18,24 @@ const (
 )
 
 type Config struct {
-	Model         string
-	APIBase       string
-	APIKey        string
-	DryRun        bool
-	Cleanup       bool
-	Yes           bool
-	Mode          Mode
-	Prompt        string
-	ContextWindow int
-	Retries       int
-	Timeout       time.Duration
-	MaxFilesGroup int
-	Scope         ChangeScope
-	PlanOut       string
-	Apply         string
+	Model            string
+	APIBase          string
+	APIKey           string
+	DryRun           bool
+	Cleanup          bool
+	Yes              bool
+	Mode             Mode
+	Prompt           string
+	ContextWindow    int
+	Retries          int
+	Timeout          time.Duration
+	MaxFilesGroup    int
+	Scope            ChangeScope
+	PlanOut          string
+	Apply            string
+	Include          []string
+	Exclude          []string
+	IncludeSensitive bool
 }
 
 var KnownProviders = map[string]string{
@@ -50,15 +53,18 @@ var ProviderDefaults = map[string]string{
 }
 
 type RawFlags struct {
-	Mode     string
-	DryRun   bool
-	Cleanup  bool
-	Yes      bool
-	Doctor   bool
-	Staged   bool
-	Unstaged bool
-	PlanOut  string
-	Apply    string
+	Mode             string
+	DryRun           bool
+	Cleanup          bool
+	Yes              bool
+	Doctor           bool
+	Staged           bool
+	Unstaged         bool
+	PlanOut          string
+	Apply            string
+	Include          []string
+	Exclude          []string
+	IncludeSensitive bool
 }
 
 func ParseArgs(args []string) (RawFlags, bool) {
@@ -90,6 +96,18 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				i++
 				f.Apply = args[i]
 			}
+		case "--include":
+			if i+1 < len(args) {
+				i++
+				f.Include = append(f.Include, args[i])
+			}
+		case "--exclude":
+			if i+1 < len(args) {
+				i++
+				f.Exclude = append(f.Exclude, args[i])
+			}
+		case "--include-sensitive":
+			f.IncludeSensitive = true
 		case "-h", "--help":
 			return f, true
 		}
@@ -269,21 +287,24 @@ func ResolveConfig(f RawFlags) Config {
 	}
 
 	return Config{
-		Model:         model,
-		APIBase:       apiBase,
-		APIKey:        apiKey,
-		DryRun:        f.DryRun,
-		Cleanup:       f.Cleanup,
-		Yes:           f.Yes,
-		Mode:          Mode(f.Mode),
-		Prompt:        prompt,
-		ContextWindow: contextWindow,
-		Retries:       retries,
-		Timeout:       timeout,
-		MaxFilesGroup: maxFilesGroup,
-		Scope:         scope,
-		PlanOut:       f.PlanOut,
-		Apply:         f.Apply,
+		Model:            model,
+		APIBase:          apiBase,
+		APIKey:           apiKey,
+		DryRun:           f.DryRun,
+		Cleanup:          f.Cleanup,
+		Yes:              f.Yes,
+		Mode:             Mode(f.Mode),
+		Prompt:           prompt,
+		ContextWindow:    contextWindow,
+		Retries:          retries,
+		Timeout:          timeout,
+		MaxFilesGroup:    maxFilesGroup,
+		Scope:            scope,
+		PlanOut:          f.PlanOut,
+		Apply:            f.Apply,
+		Include:          f.Include,
+		Exclude:          f.Exclude,
+		IncludeSensitive: f.IncludeSensitive,
 	}
 }
 
@@ -300,6 +321,9 @@ Usage:
   commit-pilot --unstaged                # ignore staged changes
   commit-pilot --plan-out <path>         # save generated plan as JSON
   commit-pilot --apply <path>            # apply an edited JSON plan
+  commit-pilot --include <glob>          # include matching files only
+  commit-pilot --exclude <glob>          # exclude matching files
+  commit-pilot --include-sensitive       # allow sensitive-looking files to reach the model
   commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:
