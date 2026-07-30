@@ -67,6 +67,8 @@ For repository-specific defaults, add `.commit-pilot/config.env`. Its values
 override the user config, while environment variables still take precedence.
 Commit Pilot never creates this project file.
 
+Message preferences work in either config file: `COMMIT_PILOT_CONVENTIONAL_COMMITS`, `COMMIT_PILOT_TICKET_PREFIX`, `COMMIT_PILOT_IMPERATIVE_TONE`, `COMMIT_PILOT_MAX_SUBJECT_LENGTH`, and `COMMIT_PILOT_BODY_STYLE`. Environment values override config values.
+
 ## Review the commit plan
 
 Before writing commits, Commit Pilot shows the proposed subjects and files and asks

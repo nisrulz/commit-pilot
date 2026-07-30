@@ -42,7 +42,7 @@ func Main() {
 		return
 	}
 
-	tmpl := LoadPrompt(cfg.Mode, cfg.Prompt)
+	tmpl := ApplyMessagePreferences(LoadPrompt(cfg.Mode, cfg.Prompt), cfg)
 
 	changes, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil {
@@ -83,7 +83,7 @@ func Main() {
 			return
 		}
 		for _, group := range groups {
-			if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun) {
+			if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength) {
 				os.Exit(1)
 			}
 		}
@@ -156,7 +156,7 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
 	if !ConfirmCommitPlan([]CommitGroup{{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}}, cfg, changes.Fingerprint) {
 		return false
 	}
-	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun) {
+	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun, cfg.MaxSubjectLength) {
 		os.Exit(1)
 	}
 	return true
@@ -252,7 +252,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	fmt.Fprintf(os.Stderr, "  %s Summaries -> %s\n", yellow("~"), target)
 
 	summarizeTmpl := LoadSection("summarize")
-	planTmpl := LoadSection("plan")
+	planTmpl := ApplyMessagePreferences(LoadSection("plan"), cfg)
 
 	summariesJSON, err := SummarizeChanges(cfg, summarizeTmpl, files, target)
 	if err != nil {
@@ -296,7 +296,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	}
 	commitFailed := false
 	for _, g := range groups {
-		if !ExecuteCommit(g.Files, g.Subject, g.Description, cfg.DryRun) {
+		if !ExecuteCommit(g.Files, g.Subject, g.Description, cfg.DryRun, cfg.MaxSubjectLength) {
 			commitFailed = true
 		}
 	}

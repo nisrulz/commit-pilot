@@ -365,6 +365,15 @@ func TestLintPlan(t *testing.T) {
 	}
 }
 
+func TestApplyMessagePreferences(t *testing.T) {
+	got := lib.ApplyMessagePreferences("prompt", lib.Config{Conventional: false, TicketPrefix: "ABC-", Imperative: true, MaxSubjectLength: 55, BodyStyle: "bulleted"})
+	for _, want := range []string{"Do not require", "ABC-", "imperative", "55", "bulleted"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("preferences missing %q: %s", want, got)
+		}
+	}
+}
+
 func TestListProviderModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models" {

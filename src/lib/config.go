@@ -37,6 +37,11 @@ type Config struct {
 	Include          []string
 	Exclude          []string
 	IncludeSensitive bool
+	Conventional     bool
+	TicketPrefix     string
+	Imperative       bool
+	MaxSubjectLength int
+	BodyStyle        string
 }
 
 var KnownProviders = map[string]string{
@@ -216,7 +221,7 @@ func readConfigFile(file *os.File) map[string]string {
 			continue
 		}
 		switch key = strings.TrimSpace(key); key {
-		case "OPENAI_PROVIDER", "OPENAI_MODEL", "OPENAI_BASE_URL":
+		case "OPENAI_PROVIDER", "OPENAI_MODEL", "OPENAI_BASE_URL", "COMMIT_PILOT_CONVENTIONAL_COMMITS", "COMMIT_PILOT_TICKET_PREFIX", "COMMIT_PILOT_IMPERATIVE_TONE", "COMMIT_PILOT_MAX_SUBJECT_LENGTH", "COMMIT_PILOT_BODY_STYLE":
 			values[key] = strings.TrimSpace(value)
 		default:
 			fmt.Fprintf(os.Stderr, "  ! ignoring unsupported config key: %s\n", key)
@@ -301,6 +306,10 @@ func ResolveConfig(f RawFlags) Config {
 	if value, err := strconv.Atoi(os.Getenv("COMMIT_PILOT_MAX_FILES_PER_GROUP")); err == nil && value >= 0 {
 		maxFilesGroup = value
 	}
+	maxSubjectLength := MaxSubjectLength
+	if value, err := strconv.Atoi(configValue("COMMIT_PILOT_MAX_SUBJECT_LENGTH", defaults)); err == nil && value > 0 {
+		maxSubjectLength = value
+	}
 	scope := ScopeAuto
 	if f.Staged {
 		scope = ScopeStaged
@@ -328,7 +337,21 @@ func ResolveConfig(f RawFlags) Config {
 		Include:          f.Include,
 		Exclude:          f.Exclude,
 		IncludeSensitive: f.IncludeSensitive,
+		Conventional:     configBool("COMMIT_PILOT_CONVENTIONAL_COMMITS", defaults, true),
+		TicketPrefix:     configValue("COMMIT_PILOT_TICKET_PREFIX", defaults),
+		Imperative:       configBool("COMMIT_PILOT_IMPERATIVE_TONE", defaults, true),
+		MaxSubjectLength: maxSubjectLength,
+		BodyStyle:        configValue("COMMIT_PILOT_BODY_STYLE", defaults),
 	}
+}
+
+func configBool(name string, defaults map[string]string, fallback bool) bool {
+	value := configValue(name, defaults)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	return err == nil && parsed
 }
 
 func printHelp() {

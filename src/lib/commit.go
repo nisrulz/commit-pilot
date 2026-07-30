@@ -118,7 +118,7 @@ func ParseCommitGroup(text string) (CommitGroup, error) {
 	return CommitGroup{}, fmt.Errorf("parse commit group: expected JSON object with 'subject' field")
 }
 
-func ExecuteCommit(files []string, subject, description string, dryRun bool) bool {
+func ExecuteCommit(files []string, subject, description string, dryRun bool, maxSubjectLength int) bool {
 	if len(files) == 0 {
 		return false
 	}
@@ -130,8 +130,11 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool) boo
 	if subject == "" {
 		subject = "chore: update"
 	}
-	if utf8.RuneCountInString(subject) > 100 {
-		subject = string([]rune(subject)[:100])
+	if maxSubjectLength <= 0 {
+		maxSubjectLength = MaxSubjectLength
+	}
+	if utf8.RuneCountInString(subject) > maxSubjectLength {
+		subject = string([]rune(subject)[:maxSubjectLength])
 	}
 
 	if !dryRun {
