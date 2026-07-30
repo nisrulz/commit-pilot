@@ -1,7 +1,9 @@
 package lib
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -27,19 +29,24 @@ func RunDoctor(cfg Config) bool {
 	fmt.Printf("    API key: %s\n", keyStatus)
 	fmt.Printf("    Config: %s/config.env\n", ConfigDir())
 
-	if err := CheckProvider(cfg); err != nil {
+	found, err := CheckProvider(cfg)
+	if err != nil {
 		fmt.Printf("  %s Provider: %v\n", red("!"), err)
+		return false
+	}
+	if !found {
+		fmt.Printf("  %s Model %q is not available from the provider\n", red("!"), cfg.Model)
 		return false
 	}
 	fmt.Printf("  %s Provider is reachable\n", green("✔"))
 	return ok
 }
 
-func CheckProvider(cfg Config) error {
+func CheckProvider(cfg Config) (bool, error) {
 	url := strings.TrimRight(cfg.APIBase, "/") + "/models"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if cfg.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
@@ -47,11 +54,32 @@ func CheckProvider(cfg Config) error {
 
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
-		return fmt.Errorf("could not reach %s", cfg.APIBase)
+		return false, fmt.Errorf("could not reach %s", cfg.APIBase)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("returned status %d", resp.StatusCode)
+		return false, fmt.Errorf("returned status %d", resp.StatusCode)
 	}
-	return nil
+
+	var payload struct {
+		Data   []struct{ ID string } `json:"data"`
+		Models []struct {
+			ID  string `json:"id"`
+			Key string `json:"key"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, MaxResponseSize)).Decode(&payload); err != nil {
+		return false, fmt.Errorf("could not read model list")
+	}
+	for _, model := range payload.Data {
+		if model.ID == cfg.Model {
+			return true, nil
+		}
+	}
+	for _, model := range payload.Models {
+		if model.ID == cfg.Model || model.Key == cfg.Model {
+			return true, nil
+		}
+	}
+	return false, nil
 }
