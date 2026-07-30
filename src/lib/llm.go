@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -79,6 +80,7 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	var respBody []byte
 	var status int
 	for attempt := 0; attempt <= retries; attempt++ {
+		var retryAfter time.Duration
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
 		if err != nil {
@@ -93,6 +95,9 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 		resp, err := client.Do(req)
 		if err == nil {
 			status = resp.StatusCode
+			if seconds, parseErr := strconv.Atoi(resp.Header.Get("Retry-After")); parseErr == nil && seconds > 0 {
+				retryAfter = time.Duration(seconds) * time.Second
+			}
 			respBody, err = io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 			resp.Body.Close()
 		}
@@ -109,7 +114,11 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 			}
 			break
 		}
-		time.Sleep(time.Second << attempt)
+		if retryAfter > 0 {
+			time.Sleep(retryAfter)
+		} else {
+			time.Sleep(time.Second << attempt)
+		}
 	}
 
 	if status != http.StatusOK {
