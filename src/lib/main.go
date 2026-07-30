@@ -25,6 +25,16 @@ func Main() {
 	}
 
 	cfg := ResolveConfig(flags)
+	if flags.ListModels {
+		models, err := ListProviderModels(cfg)
+		if err != nil {
+			Die("list models: %v", err)
+		}
+		for _, model := range models {
+			fmt.Println(model)
+		}
+		return
+	}
 	if flags.Doctor {
 		if !RunDoctor(cfg) {
 			os.Exit(1)

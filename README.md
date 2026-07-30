@@ -94,6 +94,8 @@ Use `--no-commit` when you want to generate and review a plan without creating c
 Run `commit-pilot --doctor` to check the current Git repository, resolved provider
 settings, and provider connection. It never prints your API key.
 
+Run `commit-pilot --list-models` to print the models reported by the configured provider.
+
 ## Handling large diffs
 
 Commit Pilot automatically handles changes that exceed the model's context window:

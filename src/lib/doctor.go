@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -43,10 +44,23 @@ func RunDoctor(cfg Config) bool {
 }
 
 func CheckProvider(cfg Config) (bool, error) {
+	models, err := ListProviderModels(cfg)
+	if err != nil {
+		return false, err
+	}
+	for _, model := range models {
+		if model == cfg.Model {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func ListProviderModels(cfg Config) ([]string, error) {
 	url := strings.TrimRight(cfg.APIBase, "/") + "/models"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if cfg.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
@@ -54,11 +68,11 @@ func CheckProvider(cfg Config) (bool, error) {
 
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
-		return false, fmt.Errorf("could not reach %s", cfg.APIBase)
+		return nil, fmt.Errorf("could not reach %s", cfg.APIBase)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return false, fmt.Errorf("returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("returned status %d", resp.StatusCode)
 	}
 
 	var payload struct {
@@ -69,17 +83,24 @@ func CheckProvider(cfg Config) (bool, error) {
 		} `json:"models"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, MaxResponseSize)).Decode(&payload); err != nil {
-		return false, fmt.Errorf("could not read model list")
+		return nil, fmt.Errorf("could not read model list")
 	}
+	seen := make(map[string]bool)
+	var models []string
 	for _, model := range payload.Data {
-		if model.ID == cfg.Model {
-			return true, nil
+		if model.ID != "" && !seen[model.ID] {
+			models = append(models, model.ID)
+			seen[model.ID] = true
 		}
 	}
 	for _, model := range payload.Models {
-		if model.ID == cfg.Model || model.Key == cfg.Model {
-			return true, nil
+		for _, name := range []string{model.ID, model.Key} {
+			if name != "" && !seen[name] {
+				models = append(models, name)
+				seen[name] = true
+			}
 		}
 	}
-	return false, nil
+	sort.Strings(models)
+	return models, nil
 }

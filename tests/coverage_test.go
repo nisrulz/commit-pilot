@@ -1,6 +1,8 @@
 package lib_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -363,6 +365,20 @@ func TestLintPlan(t *testing.T) {
 	}
 }
 
+func TestListProviderModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"z"}],"models":[{"key":"a"}]}`))
+	}))
+	defer server.Close()
+	models, err := lib.ListProviderModels(lib.Config{APIBase: server.URL})
+	if err != nil || strings.Join(models, ",") != "a,z" {
+		t.Fatalf("models=%v err=%v", models, err)
+	}
+}
+
 func TestWarnInsecureHTTP(t *testing.T) {
 	lib.WarnInsecureHTTP("https://api.openai.com/v1", "sk-test")
 	lib.WarnInsecureHTTP("http://localhost:1234/v1", "sk-test")
@@ -493,9 +509,9 @@ func TestIsBinaryDiffKnownPatterns(t *testing.T) {
 
 func TestFilterChangesFiltersAllPlanFiles(t *testing.T) {
 	changes := &lib.Changes{
-		AllFiles: []string{"main.go", "private.pem", "package-lock.json"},
+		AllFiles:       []string{"main.go", "private.pem", "package-lock.json"},
 		FilesWithDiffs: []lib.FileDiff{{Path: "main.go"}, {Path: "package-lock.json"}},
-		BinaryFiles: []string{"private.pem"},
+		BinaryFiles:    []string{"private.pem"},
 	}
 	lib.FilterChanges(changes, nil, nil, false)
 	if got := lib.AllFilePaths(changes); len(got) != 1 || got[0] != "main.go" {

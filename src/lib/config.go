@@ -59,6 +59,7 @@ type RawFlags struct {
 	Cleanup          bool
 	Yes              bool
 	Doctor           bool
+	ListModels       bool
 	Staged           bool
 	Unstaged         bool
 	PlanOut          string
@@ -84,6 +85,8 @@ func ParseArgs(args []string) (RawFlags, bool) {
 			f.Yes = true
 		case "--doctor":
 			f.Doctor = true
+		case "--list-models":
+			f.ListModels = true
 		case "--staged":
 			f.Staged = true
 		case "--unstaged":
@@ -96,7 +99,7 @@ func ParseArgs(args []string) (RawFlags, bool) {
 		case "--apply":
 			if i+1 < len(args) {
 				i++
-			f.Apply = args[i]
+				f.Apply = args[i]
 			}
 		case "--plan-lint":
 			if i+1 < len(args) {
@@ -338,6 +341,7 @@ Usage:
   commit-pilot --no-commit               # preview only (alias for --dry-run)
   commit-pilot --yes                     # apply proposed commits without prompting
   commit-pilot --doctor                  # check Git and provider setup
+  commit-pilot --list-models             # list models available from the provider
   commit-pilot --staged                  # use staged changes only
   commit-pilot --unstaged                # ignore staged changes
   commit-pilot --plan-out <path>         # save generated plan as JSON
