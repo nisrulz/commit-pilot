@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,7 +59,11 @@ func CheckProvider(cfg Config) (bool, error) {
 
 func ListProviderModels(cfg Config) ([]string, error) {
 	url := strings.TrimRight(cfg.APIBase, "/") + "/models"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	ctx := cfg.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +71,11 @@ func ListProviderModels(cfg Config) ([]string, error) {
 		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 	}
 
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("could not reach %s", cfg.APIBase)
 	}

@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -9,15 +10,6 @@ import (
 )
 
 func Main() {
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sig
-		fmt.Println()
-		fmt.Printf("  %s Interrupted — no changes committed.\n", yellow("!"))
-		os.Exit(1)
-	}()
-
 	flags, showHelp := ParseArgs(os.Args[1:])
 	if showHelp {
 		printHelp()
@@ -25,6 +17,9 @@ func Main() {
 	}
 
 	cfg := ResolveConfig(flags)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	cfg.Context = ctx
 	if flags.ListModels {
 		models, err := ListProviderModels(cfg)
 		if err != nil {

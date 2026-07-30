@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,6 +43,8 @@ type Config struct {
 	Imperative       bool
 	MaxSubjectLength int
 	BodyStyle        string
+	Context          context.Context
+	HTTPClient       HTTPDoer
 }
 
 var KnownProviders = map[string]string{
@@ -342,6 +345,7 @@ func ResolveConfig(f RawFlags) Config {
 		Imperative:       configBool("COMMIT_PILOT_IMPERATIVE_TONE", defaults, true),
 		MaxSubjectLength: maxSubjectLength,
 		BodyStyle:        configValue("COMMIT_PILOT_BODY_STYLE", defaults),
+		Context:          context.Background(),
 	}
 }
 

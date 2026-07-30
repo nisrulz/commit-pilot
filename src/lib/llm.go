@@ -17,6 +17,10 @@ import (
 
 const MaxResponseSize = 1 << 20
 
+type HTTPDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -53,6 +57,13 @@ const MaxJSONDepth = 100
 var JSONBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
 
 func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
+	return CallLLMContext(cfg.Context, prompt, cfg, maxTokens)
+}
+
+func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens int) (string, error) {
+	if parent == nil {
+		parent = context.Background()
+	}
 	WarnInsecureHTTP(cfg.APIBase, cfg.APIKey)
 
 	body, err := json.Marshal(ChatRequest{
@@ -68,7 +79,10 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	}
 	apiURL := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
 
-	client := &http.Client{}
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{}
+	}
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = defaultTimeout
@@ -81,7 +95,7 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	var status int
 	for attempt := 0; attempt <= retries; attempt++ {
 		var retryAfter time.Duration
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(parent, timeout)
 		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
 		if err != nil {
 			cancel()
@@ -114,10 +128,13 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 			}
 			break
 		}
-		if retryAfter > 0 {
-			time.Sleep(retryAfter)
-		} else {
-			time.Sleep(time.Second << attempt)
+		if retryAfter == 0 {
+			retryAfter = time.Second << attempt
+		}
+		select {
+		case <-parent.Done():
+			return "", parent.Err()
+		case <-time.After(retryAfter):
 		}
 	}
 

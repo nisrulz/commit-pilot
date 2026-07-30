@@ -1,9 +1,25 @@
 package lib_test
 
 import (
+	"context"
+	"errors"
 	lib "github.com/nisrulz/commit-pilot/src/lib"
+	"net/http"
 	"testing"
 )
+
+type failingDoer struct{}
+
+func (failingDoer) Do(*http.Request) (*http.Response, error) { return nil, errors.New("unavailable") }
+
+func TestCallLLMContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := lib.CallLLMContext(ctx, "prompt", lib.Config{APIBase: "http://example.test", Timeout: 1, Retries: 1, HTTPClient: failingDoer{}}, 1)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
+	}
+}
 
 func TestExtractJSON_depthLimit(t *testing.T) {
 	depth := lib.MaxJSONDepth + 10
