@@ -233,7 +233,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 
 	allPaths := AllFilePaths(changes)
 	for i, g := range groups {
-		groups[i].Files = LimitCommitScope(FilterValidFiles(g.Files, allPaths))
+		groups[i].Files = LimitCommitScopeTo(FilterValidFiles(g.Files, allPaths), cfg.MaxFilesGroup)
 	}
 
 	groups = AssignBinaryFiles(groups, changes.BinaryFiles)

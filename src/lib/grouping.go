@@ -54,7 +54,11 @@ func FilterValidFiles(candidateFiles, validFiles []string) []string {
 }
 
 func LimitCommitScope(files []string) []string {
-	if len(files) <= MaxFilesPerGroup {
+	return LimitCommitScopeTo(files, MaxFilesPerGroup)
+}
+
+func LimitCommitScopeTo(files []string, maxFiles int) []string {
+	if maxFiles == 0 || len(files) <= maxFiles {
 		return files
 	}
 
@@ -82,8 +86,8 @@ func LimitCommitScope(files []string) []string {
 		}
 	}
 
-	if len(same) > MaxFilesPerGroup {
-		same = same[:MaxFilesPerGroup]
+	if len(same) > maxFiles {
+		same = same[:maxFiles]
 	}
 	return same
 }

@@ -41,6 +41,7 @@ Configuration can be supplied through environment variables or a local config fi
 | Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
 | Retries | `COMMIT_PILOT_RETRIES` | `2` |
 | Request timeout | `COMMIT_PILOT_TIMEOUT_SECONDS` | `180` |
+| Maximum files per commit | `COMMIT_PILOT_MAX_FILES_PER_GROUP` | `3` (`0` disables the cap) |
 | Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
 | Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
 

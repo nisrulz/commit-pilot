@@ -66,6 +66,14 @@ func TestLimitCommitScope_overLimit(t *testing.T) {
 	}
 }
 
+func TestLimitCommitScopeTo_zeroDisablesLimit(t *testing.T) {
+	files := []string{"a.go", "b.go", "c.go", "d.go"}
+	result := lib.LimitCommitScopeTo(files, 0)
+	if len(result) != len(files) {
+		t.Fatalf("expected all files, got %v", result)
+	}
+}
+
 func TestSubjectsRelated_same(t *testing.T) {
 	if !lib.SubjectsRelated("feat: add login", "feat: add login") {
 		t.Fatal("identical subjects should be related")
