@@ -92,6 +92,25 @@ func LimitCommitScopeTo(files []string, maxFiles int) []string {
 	return same
 }
 
+func SplitCommitGroups(groups []CommitGroup, maxFiles int) []CommitGroup {
+	if maxFiles == 0 {
+		return groups
+	}
+	var result []CommitGroup
+	for _, group := range groups {
+		for len(group.Files) > maxFiles {
+			part := group
+			part.Files = append([]string(nil), group.Files[:maxFiles]...)
+			result = append(result, part)
+			group.Files = group.Files[maxFiles:]
+		}
+		if len(group.Files) > 0 {
+			result = append(result, group)
+		}
+	}
+	return result
+}
+
 func SubjectsRelated(a, b string) bool {
 	if a == "" || b == "" {
 		return false

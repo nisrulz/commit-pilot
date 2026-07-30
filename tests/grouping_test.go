@@ -2,6 +2,7 @@ package lib_test
 
 import (
 	lib "github.com/nisrulz/commit-pilot/src/lib"
+	"strings"
 	"testing"
 )
 
@@ -71,6 +72,23 @@ func TestLimitCommitScopeTo_zeroDisablesLimit(t *testing.T) {
 	result := lib.LimitCommitScopeTo(files, 0)
 	if len(result) != len(files) {
 		t.Fatalf("expected all files, got %v", result)
+	}
+}
+
+func TestSplitCommitGroupsPreservesEveryFile(t *testing.T) {
+	groups := lib.SplitCommitGroups([]lib.CommitGroup{{Subject: "feat: add files", Files: []string{"a.go", "b.go", "c.go", "d.go", "e.go"}}}, 2)
+	if len(groups) != 3 {
+		t.Fatalf("expected 3 groups, got %d", len(groups))
+	}
+	var files []string
+	for _, group := range groups {
+		if len(group.Files) > 2 {
+			t.Fatalf("group exceeds cap: %v", group.Files)
+		}
+		files = append(files, group.Files...)
+	}
+	if strings.Join(files, ",") != "a.go,b.go,c.go,d.go,e.go" {
+		t.Fatalf("files were lost or reordered: %v", files)
 	}
 }
 

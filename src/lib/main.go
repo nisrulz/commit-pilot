@@ -319,11 +319,15 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 
 	allPaths := AllFilePaths(changes)
 	for i, g := range groups {
-		groups[i].Files = LimitCommitScopeTo(FilterValidFiles(g.Files, allPaths), cfg.MaxFilesGroup)
+		groups[i].Files = FilterValidFiles(g.Files, allPaths)
 	}
 
 	groups = AssignBinaryFiles(groups, changes.BinaryFiles)
 	groups = MergeGroups(groups)
+	groups = SplitCommitGroups(groups, cfg.MaxFilesGroup)
+	if err := ValidatePlan(groups, allPaths); err != nil {
+		Die("invalid generated plan: %v", err)
+	}
 	if cfg.PlanOut != "" {
 		if err := WritePlan(cfg.PlanOut, groups); err != nil {
 			Die("write plan: %v", err)
