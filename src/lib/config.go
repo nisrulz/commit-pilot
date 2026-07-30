@@ -30,6 +30,7 @@ type Config struct {
 	Retries       int
 	Timeout       time.Duration
 	MaxFilesGroup int
+	Scope         ChangeScope
 }
 
 var KnownProviders = map[string]string{
@@ -47,11 +48,13 @@ var ProviderDefaults = map[string]string{
 }
 
 type RawFlags struct {
-	Mode    string
-	DryRun  bool
-	Cleanup bool
-	Yes     bool
-	Doctor  bool
+	Mode     string
+	DryRun   bool
+	Cleanup  bool
+	Yes      bool
+	Doctor   bool
+	Staged   bool
+	Unstaged bool
 }
 
 func ParseArgs(args []string) (RawFlags, bool) {
@@ -68,6 +71,10 @@ func ParseArgs(args []string) (RawFlags, bool) {
 			f.Yes = true
 		case "--doctor":
 			f.Doctor = true
+		case "--staged":
+			f.Staged = true
+		case "--unstaged":
+			f.Unstaged = true
 		case "-h", "--help":
 			return f, true
 		}
@@ -239,6 +246,12 @@ func ResolveConfig(f RawFlags) Config {
 	if value, err := strconv.Atoi(os.Getenv("COMMIT_PILOT_MAX_FILES_PER_GROUP")); err == nil && value >= 0 {
 		maxFilesGroup = value
 	}
+	scope := ScopeAuto
+	if f.Staged {
+		scope = ScopeStaged
+	} else if f.Unstaged {
+		scope = ScopeUnstaged
+	}
 
 	return Config{
 		Model:         model,
@@ -253,6 +266,7 @@ func ResolveConfig(f RawFlags) Config {
 		Retries:       retries,
 		Timeout:       timeout,
 		MaxFilesGroup: maxFilesGroup,
+		Scope:         scope,
 	}
 }
 
@@ -265,6 +279,8 @@ Usage:
   commit-pilot --dry-run                 # preview only
   commit-pilot --yes                     # apply proposed commits without prompting
   commit-pilot --doctor                  # check Git and provider setup
+  commit-pilot --staged                  # use staged changes only
+  commit-pilot --unstaged                # ignore staged changes
   commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:

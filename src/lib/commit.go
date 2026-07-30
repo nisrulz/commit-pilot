@@ -165,7 +165,7 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 	if cfg.DryRun {
 		return true
 	}
-	current, err := GetGitChanges()
+	current, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil || current.Fingerprint != fingerprint {
 		fmt.Println("  Changes were updated while the plan was being generated. Please run commit-pilot again.")
 		return false

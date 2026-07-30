@@ -34,7 +34,7 @@ func Main() {
 
 	tmpl := LoadPrompt(cfg.Mode, cfg.Prompt)
 
-	changes, err := GetGitChanges()
+	changes, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil {
 		Die("git: %v", err)
 	}
@@ -173,7 +173,7 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	fmt.Printf("  %s Found uncommitted changes. Attempting to group and commit.\n", yellow("⚠️"))
 
-	remainingChanges, err := GetGitChanges()
+	remainingChanges, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil {
 		Die("git status check failed: %v", err)
 	}

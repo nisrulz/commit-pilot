@@ -21,6 +21,14 @@ type Changes struct {
 	Fingerprint    string
 }
 
+type ChangeScope int
+
+const (
+	ScopeAuto ChangeScope = iota
+	ScopeStaged
+	ScopeUnstaged
+)
+
 func GitRun(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	out, err := cmd.Output()
@@ -70,16 +78,22 @@ func IsBinaryDiff(diff string) bool {
 }
 
 func GetGitChanges() (*Changes, error) {
+	return GetGitChangesForScope(ScopeAuto)
+}
+
+func GetGitChangesForScope(scope ChangeScope) (*Changes, error) {
 	_, err := GitRun("rev-parse", "--git-dir")
 	if err != nil {
 		return nil, err
 	}
 
 	staged := GitOutputPaths("diff", "--cached", "--name-only")
-	hasStaged := len(staged) > 0
+	hasStaged := len(staged) > 0 && scope != ScopeUnstaged
 
 	var files []string
-	if hasStaged {
+	if scope == ScopeStaged && len(staged) == 0 {
+		files = nil
+	} else if hasStaged {
 		files = staged
 	} else {
 		files = GitOutputPaths("diff", "--name-only")
