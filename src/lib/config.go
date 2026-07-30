@@ -145,14 +145,23 @@ func ConfigDefaults() map[string]string {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
 		key, value, ok := strings.Cut(line, "=")
-		if !ok || strings.HasPrefix(line, "#") {
+		if !ok {
+			fmt.Fprintf(os.Stderr, "  ! ignoring invalid config line: %s\n", line)
 			continue
 		}
 		switch key = strings.TrimSpace(key); key {
 		case "OPENAI_PROVIDER", "OPENAI_MODEL", "OPENAI_BASE_URL":
 			values[key] = strings.TrimSpace(value)
+		default:
+			fmt.Fprintf(os.Stderr, "  ! ignoring unsupported config key: %s\n", key)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "  ! could not read config file: %v\n", err)
 	}
 	return values
 }
