@@ -179,8 +179,20 @@ func ConfigDefaults() map[string]string {
 	if err != nil {
 		return nil
 	}
-	defer file.Close()
+	values := readConfigFile(file)
+	if root, err := GitRun("rev-parse", "--show-toplevel"); err == nil {
+		projectPath := filepath.Join(strings.TrimSpace(root), ".commit-pilot", configFileName)
+		if project, err := os.Open(projectPath); err == nil {
+			for key, value := range readConfigFile(project) {
+				values[key] = value
+			}
+		}
+	}
+	return values
+}
 
+func readConfigFile(file *os.File) map[string]string {
+	defer file.Close()
 	values := make(map[string]string)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

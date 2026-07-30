@@ -63,6 +63,10 @@ provider, model, and API base on its first run.
 Values set in the environment take precedence over this file. API keys stay
 environment-only.
 
+For repository-specific defaults, add `.commit-pilot/config.env`. Its values
+override the user config, while environment variables still take precedence.
+Commit Pilot never creates this project file.
+
 ## Review the commit plan
 
 Before writing commits, Commit Pilot shows the proposed subjects and files and asks

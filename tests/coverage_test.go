@@ -325,6 +325,33 @@ func TestConfigDefaultsCreatesFile(t *testing.T) {
 	}
 }
 
+func TestProjectConfigOverridesUserConfig(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte("OPENAI_MODEL=user-model\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := lib.GitRun("rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Skip("test requires Git repository")
+	}
+	projectDir := filepath.Join(strings.TrimSpace(root), ".commit-pilot")
+	projectConfig := filepath.Join(projectDir, "config.env")
+	if err := os.MkdirAll(projectDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projectConfig, []byte("OPENAI_MODEL=project-model\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(projectConfig)
+		_ = os.Remove(projectDir)
+	})
+	if got := lib.ConfigDefaults()["OPENAI_MODEL"]; got != "project-model" {
+		t.Fatalf("project config should override user config, got %q", got)
+	}
+}
+
 func TestWarnInsecureHTTP(t *testing.T) {
 	lib.WarnInsecureHTTP("https://api.openai.com/v1", "sk-test")
 	lib.WarnInsecureHTTP("http://localhost:1234/v1", "sk-test")
