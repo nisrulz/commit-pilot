@@ -75,6 +75,8 @@ commit-pilot --single --yes
 
 Use `--single` to create one commit for all changes.
 
+Use `--plan-out plan.json` to save a generated plan for review. Edit the JSON, then run `commit-pilot --apply plan.json` to validate it against the current changes and apply it.
+
 ## Check your setup
 
 Run `commit-pilot --doctor` to check the current Git repository, resolved provider

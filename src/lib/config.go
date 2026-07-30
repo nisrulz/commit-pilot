@@ -31,6 +31,8 @@ type Config struct {
 	Timeout       time.Duration
 	MaxFilesGroup int
 	Scope         ChangeScope
+	PlanOut       string
+	Apply         string
 }
 
 var KnownProviders = map[string]string{
@@ -55,11 +57,14 @@ type RawFlags struct {
 	Doctor   bool
 	Staged   bool
 	Unstaged bool
+	PlanOut  string
+	Apply    string
 }
 
 func ParseArgs(args []string) (RawFlags, bool) {
 	var f RawFlags
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch a {
 		case "--dry-run":
 			f.DryRun = true
@@ -75,6 +80,16 @@ func ParseArgs(args []string) (RawFlags, bool) {
 			f.Staged = true
 		case "--unstaged":
 			f.Unstaged = true
+		case "--plan-out":
+			if i+1 < len(args) {
+				i++
+				f.PlanOut = args[i]
+			}
+		case "--apply":
+			if i+1 < len(args) {
+				i++
+				f.Apply = args[i]
+			}
 		case "-h", "--help":
 			return f, true
 		}
@@ -267,6 +282,8 @@ func ResolveConfig(f RawFlags) Config {
 		Timeout:       timeout,
 		MaxFilesGroup: maxFilesGroup,
 		Scope:         scope,
+		PlanOut:       f.PlanOut,
+		Apply:         f.Apply,
 	}
 }
 
@@ -281,6 +298,8 @@ Usage:
   commit-pilot --doctor                  # check Git and provider setup
   commit-pilot --staged                  # use staged changes only
   commit-pilot --unstaged                # ignore staged changes
+  commit-pilot --plan-out <path>         # save generated plan as JSON
+  commit-pilot --apply <path>            # apply an edited JSON plan
   commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:

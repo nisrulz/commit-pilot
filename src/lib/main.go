@@ -48,6 +48,25 @@ func Main() {
 		fmt.Printf("  %s Only binary files changed \u2014 cannot generate AI commit message.\n", yellow("\u26a1"))
 		return
 	}
+	if cfg.Apply != "" {
+		groups, err := ReadPlan(cfg.Apply)
+		if err != nil {
+			Die("read plan: %v", err)
+		}
+		allPaths := AllFilePaths(changes)
+		for i := range groups {
+			groups[i].Files = FilterValidFiles(groups[i].Files, allPaths)
+		}
+		if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
+			return
+		}
+		for _, group := range groups {
+			if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun) {
+				os.Exit(1)
+			}
+		}
+		return
+	}
 
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(changes.AllFiles), "changed file")))
 	if len(changes.BinaryFiles) > 0 {
@@ -238,6 +257,12 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 
 	groups = AssignBinaryFiles(groups, changes.BinaryFiles)
 	groups = MergeGroups(groups)
+	if cfg.PlanOut != "" {
+		if err := WritePlan(cfg.PlanOut, groups); err != nil {
+			Die("write plan: %v", err)
+		}
+		fmt.Printf("  %s Plan -> %s\n", yellow("~"), cfg.PlanOut)
+	}
 
 	if len(groups) == 0 {
 		return target, true
