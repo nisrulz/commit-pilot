@@ -443,6 +443,9 @@ func TestIsBinaryDiffKnownPatterns(t *testing.T) {
 	if lib.IsBinaryDiff("text content\nnothing binary") {
 		t.Fatal("expected false for plain text")
 	}
+	if !lib.IsBinaryDiff("GIT binary patch\nliteral 12") {
+		t.Fatal("expected true for Git binary patch")
+	}
 }
 
 func TestFilterChangesFiltersAllPlanFiles(t *testing.T) {

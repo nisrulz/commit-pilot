@@ -63,7 +63,7 @@ func GitOutputPaths(args ...string) []string {
 // IsBinaryDiff checks if diff content indicates a binary file
 func IsBinaryDiff(diff string) bool {
 	// Check for explicit "Binary files" message
-	if strings.Contains(diff, "Binary files") {
+	if strings.Contains(diff, "Binary files") || strings.Contains(diff, "GIT binary patch") {
 		return true
 	}
 
@@ -118,11 +118,11 @@ func GetGitChangesForScope(scope ChangeScope) (*Changes, error) {
 		var raw string
 		var err error
 		if hasStaged {
-			raw, err = GitRun("diff", "--cached", "--", f)
+			raw, err = GitRun("diff", "--cached", "--binary", "--", f)
 		} else {
-			raw, err = GitRun("diff", "--", f)
+			raw, err = GitRun("diff", "--binary", "--", f)
 			if raw == "" && err == nil {
-				raw, err = GitRun("diff", "--no-index", "/dev/null", f)
+				raw, err = GitRun("diff", "--no-index", "--binary", "/dev/null", f)
 			}
 		}
 
