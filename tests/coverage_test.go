@@ -445,6 +445,26 @@ func TestIsBinaryDiffKnownPatterns(t *testing.T) {
 	}
 }
 
+func TestFilterChangesFiltersAllPlanFiles(t *testing.T) {
+	changes := &lib.Changes{
+		AllFiles: []string{"main.go", "private.pem", "package-lock.json"},
+		FilesWithDiffs: []lib.FileDiff{{Path: "main.go"}, {Path: "package-lock.json"}},
+		BinaryFiles: []string{"private.pem"},
+	}
+	lib.FilterChanges(changes, nil, nil, false)
+	if got := lib.AllFilePaths(changes); len(got) != 1 || got[0] != "main.go" {
+		t.Fatalf("unexpected selected files: %v", got)
+	}
+}
+
+func TestFilterFilesHonorsIncludeAndExclude(t *testing.T) {
+	files := []lib.FileDiff{{Path: "cmd/main.go"}, {Path: "docs/readme.md"}}
+	got := lib.FilterFiles(files, []string{"cmd/*"}, []string{"*main.go"}, true)
+	if len(got) != 0 {
+		t.Fatalf("exclude should win, got: %v", got)
+	}
+}
+
 func TestContextLengthErrorFields(t *testing.T) {
 	err := &lib.ContextLengthError{
 		Message:   "msg",

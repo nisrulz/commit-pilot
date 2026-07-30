@@ -7,24 +7,50 @@ import (
 )
 
 func FilterFiles(files []FileDiff, includes, excludes []string, allowSensitive bool) []FileDiff {
-	ignored := append([]string{}, excludes...)
-	if data, err := os.ReadFile(".commitpilotignore"); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
-				ignored = append(ignored, line)
-			}
-		}
-	}
 	var out []FileDiff
 	for _, file := range files {
-		if matches(file.Path, ignored) || (!allowSensitive && IsSensitivePath(file.Path)) {
-			continue
-		}
-		if len(includes) == 0 || matches(file.Path, includes) {
+		if ShouldIncludePath(file.Path, includes, excludes, allowSensitive) {
 			out = append(out, file)
 		}
 	}
 	return out
+}
+
+func FilterChanges(changes *Changes, includes, excludes []string, allowSensitive bool) {
+	changes.FilesWithDiffs = FilterFiles(changes.FilesWithDiffs, includes, excludes, allowSensitive)
+	changes.BinaryFiles = FilterPaths(changes.BinaryFiles, includes, excludes, allowSensitive)
+	changes.AllFiles = AllFilePaths(changes)
+}
+
+func FilterPaths(paths, includes, excludes []string, allowSensitive bool) []string {
+	var out []string
+	for _, path := range paths {
+		if ShouldIncludePath(path, includes, excludes, allowSensitive) {
+			out = append(out, path)
+		}
+	}
+	return out
+}
+
+func ShouldIncludePath(path string, includes, excludes []string, allowSensitive bool) bool {
+	ignored := append([]string{}, excludes...)
+	ignored = append(ignored, IgnorePatterns()...)
+	return !matches(path, ignored) && (allowSensitive || !IsSensitivePath(path)) &&
+		(len(includes) == 0 || matches(path, includes))
+}
+
+func IgnorePatterns() []string {
+	data, err := os.ReadFile(".commitpilotignore")
+	if err != nil {
+		return nil
+	}
+	var patterns []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			patterns = append(patterns, line)
+		}
+	}
+	return patterns
 }
 
 func matches(path string, patterns []string) bool {
@@ -32,10 +58,15 @@ func matches(path string, patterns []string) bool {
 		if ok, _ := filepath.Match(pattern, path); ok {
 			return true
 		}
+		if !strings.Contains(pattern, "/") {
+			if ok, _ := filepath.Match(pattern, filepath.Base(path)); ok {
+				return true
+			}
+		}
 	}
 	return false
 }
 func IsSensitivePath(path string) bool {
 	name := strings.ToLower(filepath.Base(path))
-	return name == ".env" || strings.Contains(name, "secret") || strings.Contains(name, "key") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx")
+	return name == ".env" || strings.Contains(name, "secret") || strings.Contains(name, "key") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx") || strings.Contains(name, "lock")
 }
