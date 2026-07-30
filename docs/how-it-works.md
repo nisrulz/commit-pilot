@@ -9,7 +9,7 @@
 
 ## Auto-chunk mode (default)
 
-The AI groups related file changes into logical commits. Change a bug fix and a refactor in different files? They become separate commits.
+The AI decides the logical commit groups. Commit Pilot preserves those groups for text files and validates that every selected file is covered.
 
 ## Temp files
 

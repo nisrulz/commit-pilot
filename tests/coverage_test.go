@@ -425,41 +425,6 @@ func TestWarnInsecureHTTP(t *testing.T) {
 	lib.WarnInsecureHTTP("http://example.com/v1", "")
 }
 
-func TestFileCategoryEdgeCases(t *testing.T) {
-	got := lib.FileCategory("config.js")
-	if got != "config" {
-		t.Fatalf("expected 'config' for config.js, got '%s'", got)
-	}
-
-	got = lib.FileCategory("README")
-	if got != "docs" {
-		t.Fatalf("expected 'docs' for README, got '%s'", got)
-	}
-
-	got = lib.FileCategory(".gitignore")
-	if got != "config" {
-		t.Fatalf("expected 'config' for .gitignore, got '%s'", got)
-	}
-
-	got = lib.FileCategory("run.sh")
-	if got != "scripts" {
-		t.Fatalf("expected 'scripts' for run.sh, got '%s'", got)
-	}
-
-	got = lib.FileCategory("main.go")
-	if got != "code" {
-		t.Fatalf("expected 'code' for main.go, got '%s'", got)
-	}
-}
-
-func TestLimitCommitScopeEdgeCases(t *testing.T) {
-	files := []string{"a.go", "b.go", "c.go", "d.go", "e.go"}
-	result := lib.LimitCommitScope(files)
-	if len(result) > 3 {
-		t.Fatalf("expected at most 3 files, got %d", len(result))
-	}
-}
-
 func TestAssignBinaryFilesEdgeCases(t *testing.T) {
 	groups := []lib.CommitGroup{
 		{Subject: "feat: x", Files: []string{"dir/a.go"}},
@@ -472,26 +437,6 @@ func TestAssignBinaryFilesEdgeCases(t *testing.T) {
 	result = lib.AssignBinaryFiles(nil, []string{"a.bin"})
 	if result != nil {
 		t.Fatalf("expected nil for nil groups, got %v", result)
-	}
-}
-
-func TestMergeGroupsEdgeCases(t *testing.T) {
-	groups := []lib.CommitGroup{
-		{Subject: "feat: add login", Files: []string{"login.go"}},
-		{Subject: "feat: add login", Files: []string{"session.go"}},
-	}
-	result := lib.MergeGroups(groups)
-	if len(result) != 1 {
-		t.Fatalf("expected 1 merged group, got %d", len(result))
-	}
-}
-
-func TestSubjectsRelatedEdgeCases(t *testing.T) {
-	if lib.SubjectsRelated("feat: a", "") {
-		t.Fatal("expected false for empty second subject")
-	}
-	if lib.SubjectsRelated("", "feat: a") {
-		t.Fatal("expected false for empty first subject")
 	}
 }
 

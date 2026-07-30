@@ -41,7 +41,6 @@ Configuration can be supplied through environment variables or a local config fi
 | Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
 | Retries | `COMMIT_PILOT_RETRIES` | `2` |
 | Request timeout | `COMMIT_PILOT_TIMEOUT_SECONDS` | `180` |
-| Maximum files per commit | `COMMIT_PILOT_MAX_FILES_PER_GROUP` | `3` (`0` disables the cap) |
 | Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
 | Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
 | Conventional commits | `COMMIT_PILOT_CONVENTIONAL_COMMITS` | `true` |
@@ -84,7 +83,7 @@ COMMIT_PILOT_BODY_STYLE=short bullet list
 
 ## Review the commit plan
 
-Before writing commits, Commit Pilot shows the proposed subjects and files and asks
+Before writing commits, Commit Pilot uses the model's proposed groups without a local file-count cap, then shows the proposed subjects and files and asks
 for confirmation. Use `--yes` for non-interactive or fully autonomous runs:
 
 ```bash

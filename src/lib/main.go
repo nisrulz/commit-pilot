@@ -329,8 +329,6 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	}
 
 	groups = AssignBinaryFiles(groups, changes.BinaryFiles)
-	groups = MergeGroups(groups)
-	groups = SplitCommitGroups(groups, cfg.MaxFilesGroup)
 	if err := ValidatePlan(groups, allPaths); err != nil {
 		Die("invalid generated plan: %v", err)
 	}

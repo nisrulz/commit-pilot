@@ -31,7 +31,6 @@ type Config struct {
 	ContextWindow    int
 	Retries          int
 	Timeout          time.Duration
-	MaxFilesGroup    int
 	Scope            ChangeScope
 	PlanOut          string
 	Apply            string
@@ -335,10 +334,6 @@ func ResolveConfig(f RawFlags) Config {
 	if value, err := strconv.Atoi(os.Getenv("COMMIT_PILOT_TIMEOUT_SECONDS")); err == nil && value > 0 {
 		timeout = time.Duration(value) * time.Second
 	}
-	maxFilesGroup := MaxFilesPerGroup
-	if value, err := strconv.Atoi(os.Getenv("COMMIT_PILOT_MAX_FILES_PER_GROUP")); err == nil && value >= 0 {
-		maxFilesGroup = value
-	}
 	maxSubjectLength := MaxSubjectLength
 	if value, err := strconv.Atoi(configValue("COMMIT_PILOT_MAX_SUBJECT_LENGTH", defaults)); err == nil && value > 0 {
 		maxSubjectLength = value
@@ -362,7 +357,6 @@ func ResolveConfig(f RawFlags) Config {
 		ContextWindow:    contextWindow,
 		Retries:          retries,
 		Timeout:          timeout,
-		MaxFilesGroup:    maxFilesGroup,
 		Scope:            scope,
 		PlanOut:          f.PlanOut,
 		Apply:            f.Apply,
@@ -425,7 +419,6 @@ Environment variables:
   COMMIT_PILOT_CONTEXT_WINDOW  Model context window size in tokens (default: 65536)
   COMMIT_PILOT_RETRIES         Retries for transient provider failures (default: 2)
   COMMIT_PILOT_TIMEOUT_SECONDS Provider request timeout in seconds (default: 180)
-  COMMIT_PILOT_MAX_FILES_PER_GROUP  Maximum files per generated commit, 0 disables the cap (default: 3)
   COMMIT_PILOT_CONFIG_DIR      Directory for configuration (default: ~/.config/commit-pilot)
   COMMIT_PILOT_TMP_DIR         Directory for temporary summaries (default: ~/.commit-pilot/tmp)
 
