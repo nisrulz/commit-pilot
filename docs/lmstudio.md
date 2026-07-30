@@ -29,6 +29,13 @@ Explicitly:
 OPENAI_PROVIDER=lmstudio OPENAI_MODEL=gemma-4-e2b-it-qat commit-pilot
 ```
 
+Check the server and model name:
+
+```bash
+commit-pilot --doctor
+commit-pilot --list-models
+```
+
 Custom API base:
 
 ```bash

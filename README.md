@@ -44,6 +44,11 @@ Configuration can be supplied through environment variables or a local config fi
 | Maximum files per commit | `COMMIT_PILOT_MAX_FILES_PER_GROUP` | `3` (`0` disables the cap) |
 | Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
 | Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
+| Conventional commits | `COMMIT_PILOT_CONVENTIONAL_COMMITS` | `true` |
+| Ticket prefix | `COMMIT_PILOT_TICKET_PREFIX` | unset |
+| Imperative subject tone | `COMMIT_PILOT_IMPERATIVE_TONE` | `true` |
+| Subject limit | `COMMIT_PILOT_MAX_SUBJECT_LENGTH` | `100` |
+| Commit body style | `COMMIT_PILOT_BODY_STYLE` | model default |
 
 Temporary AI summaries and configuration use separate locations. `COMMIT_PILOT_TMP_DIR`
 controls the disposable summaries created in auto mode. `COMMIT_PILOT_CONFIG_DIR`
@@ -68,6 +73,14 @@ override the user config, while environment variables still take precedence.
 Commit Pilot never creates this project file.
 
 Message preferences work in either config file: `COMMIT_PILOT_CONVENTIONAL_COMMITS`, `COMMIT_PILOT_TICKET_PREFIX`, `COMMIT_PILOT_IMPERATIVE_TONE`, `COMMIT_PILOT_MAX_SUBJECT_LENGTH`, and `COMMIT_PILOT_BODY_STYLE`. Environment values override config values.
+
+For example:
+
+```dotenv
+COMMIT_PILOT_TICKET_PREFIX=PLAT-
+COMMIT_PILOT_MAX_SUBJECT_LENGTH=72
+COMMIT_PILOT_BODY_STYLE=short bullet list
+```
 
 ## Review the commit plan
 
@@ -96,7 +109,9 @@ Use `--no-commit` when you want to generate and review a plan without creating c
 Run `commit-pilot --doctor` to check the current Git repository, resolved provider
 settings, and provider connection. It never prints your API key.
 
-Run `commit-pilot --list-models` to print the models reported by the configured provider.
+Run `commit-pilot --list-models` to see the models reported by the configured
+provider. Add `--json` to return that list as JSON. Use `--quiet` to hide shared
+progress output during a regular run.
 
 ## Handling large diffs
 

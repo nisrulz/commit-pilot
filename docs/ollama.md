@@ -26,6 +26,13 @@ ollama serve
 OPENAI_PROVIDER=ollama OPENAI_MODEL=gemma4:e2b-it-qat commit-pilot
 ```
 
+Check the server and available models:
+
+```bash
+OPENAI_PROVIDER=ollama commit-pilot --doctor
+OPENAI_PROVIDER=ollama commit-pilot --list-models
+```
+
 Custom API base:
 
 ```bash

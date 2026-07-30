@@ -5,7 +5,7 @@
 3. **Batching** - splits large diffs into manageable batches
 4. **AI analysis** - sends diffs to the LLM you configured
 5. **Grouping** - the AI returns conventional commit messages with file groupings
-6. **Execution** - stages and commits each logical group
+6. **Review and execution** - shows the plan, waits for confirmation, then stages and commits each logical group
 
 ## Auto-chunk mode (default)
 
@@ -26,6 +26,10 @@ loads provider, model, and API-base defaults from `config.env` in that directory
 creates the file with the LM Studio defaults when absent, and gives environment
 variables precedence. This directory is not used for temporary summaries.
 
+For a repository-specific setup, add `.commit-pilot/config.env`. Project values
+override user config, and environment variables override both. Commit Pilot does
+not create the project file.
+
 ## Commit confirmation
 
 Before committing, Commit Pilot prints the proposed commit subjects and files, then
@@ -44,7 +48,7 @@ commit-pilot --cleanup
 
 ## Interrupt handling
 
-Press `Ctrl+C` at any point. Commit-pilot exits cleanly with a message and no changes get committed.
+Press `Ctrl+C` during a provider request to cancel the request and any retry wait.
 
 ## Single commit mode
 
@@ -60,6 +64,8 @@ Preview without committing:
 
 ```bash
 commit-pilot --dry-run
+# equivalent
+commit-pilot --no-commit
 ```
 
 ## Cleanup
@@ -93,6 +99,9 @@ export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
 ```
 
 ## Output
+
+Use `--quiet` to hide shared progress output. `commit-pilot --list-models --json`
+prints the provider model list as a JSON object for scripts and editor tooling.
 
 ```
   * feat(api): add user search endpoint

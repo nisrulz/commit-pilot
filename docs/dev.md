@@ -76,7 +76,7 @@ commit-pilot/
 | `make build` | Build the binary |
 | `make install` | Build and copy to `~/go/bin` |
 | `make vet` | Run static analysis |
-| `make test` | Run unit tests (122 tests) |
+| `make test` | Run unit tests |
 | `make clean` | Remove the binary |
 | `make test-live` | Run live integration test (requires AI provider running) |
 | `make setup-lmstudio` | Download default model for LMStudio |
@@ -93,7 +93,9 @@ make test
 go test -count=1 ./tests/ -coverpkg=./src/lib/
 ```
 
-We measure coverage for the `src/lib` package. Integration tests cover infrastructure code (HTTP, git, system calls).
+We measure coverage for the `src/lib` package. Tests cover plan validation,
+provider retries, cancellation, confirmation input, config precedence, and Git
+scope behavior.
 
 ## Live test
 
@@ -133,6 +135,9 @@ It sets up a temporary git repo with staged changes across docs, config, and cod
 - AI pipeline (git scan reaches AI call)
 - Single commit mode (`--single`)
 - Binary file detection (`.bin` file listed)
+
+Use `commit-pilot --doctor` to verify a local provider before running the live
+test. `commit-pilot --list-models` shows the model IDs the provider exposes.
 
 The temp directory `.temp-test/` lives in the project root and gets cleaned up when the script finishes.
 
