@@ -1,11 +1,21 @@
 package lib
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/fatih/color"
 )
+
+var quietOutput bool
+
+func SetOutputMode(quiet, json bool) { quietOutput = quiet || json }
+
+func PrintJSON(value any) {
+	data, _ := json.Marshal(value)
+	fmt.Println(string(data))
+}
 
 const WrapWidth = 72
 
@@ -42,14 +52,23 @@ var (
 )
 
 func PrintStep(msg string) {
+	if quietOutput {
+		return
+	}
 	fmt.Printf("  %s %s\n", green("*"), msg)
 }
 
 func PrintProcessing(msg string) {
+	if quietOutput {
+		return
+	}
 	fmt.Printf("  %s %s\n", yellow(">"), msg)
 }
 
 func PrintCommitSection(subject, description string, filePaths []string, dryRun bool) {
+	if quietOutput {
+		return
+	}
 	statusTag := "committed!"
 	colorFn := green
 	iconChar := "*"

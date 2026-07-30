@@ -48,6 +48,8 @@ type Config struct {
 	HTTPClient       HTTPDoer
 	Input            io.Reader
 	Output           io.Writer
+	JSON             bool
+	Quiet            bool
 }
 
 var KnownProviders = map[string]string{
@@ -71,6 +73,8 @@ type RawFlags struct {
 	Yes              bool
 	Doctor           bool
 	ListModels       bool
+	JSON             bool
+	Quiet            bool
 	Staged           bool
 	Unstaged         bool
 	PlanOut          string
@@ -98,6 +102,10 @@ func ParseArgs(args []string) (RawFlags, bool) {
 			f.Doctor = true
 		case "--list-models":
 			f.ListModels = true
+		case "--json":
+			f.JSON = true
+		case "--quiet":
+			f.Quiet = true
 		case "--staged":
 			f.Staged = true
 		case "--unstaged":
@@ -351,6 +359,8 @@ func ResolveConfig(f RawFlags) Config {
 		Context:          context.Background(),
 		Input:            os.Stdin,
 		Output:           os.Stdout,
+		JSON:             f.JSON,
+		Quiet:            f.Quiet,
 	}
 }
 
@@ -374,6 +384,8 @@ Usage:
   commit-pilot --yes                     # apply proposed commits without prompting
   commit-pilot --doctor                  # check Git and provider setup
   commit-pilot --list-models             # list models available from the provider
+  commit-pilot --json                    # emit machine-readable output
+  commit-pilot --quiet                   # hide progress output
   commit-pilot --staged                  # use staged changes only
   commit-pilot --unstaged                # ignore staged changes
   commit-pilot --plan-out <path>         # save generated plan as JSON

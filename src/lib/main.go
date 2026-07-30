@@ -20,13 +20,18 @@ func Main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	cfg.Context = ctx
+	SetOutputMode(cfg.Quiet, cfg.JSON)
 	if flags.ListModels {
 		models, err := ListProviderModels(cfg)
 		if err != nil {
 			Die("list models: %v", err)
 		}
-		for _, model := range models {
-			fmt.Println(model)
+		if cfg.JSON {
+			PrintJSON(map[string]any{"models": models})
+		} else {
+			for _, model := range models {
+				fmt.Println(model)
+			}
 		}
 		return
 	}
