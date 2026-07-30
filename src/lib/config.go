@@ -234,9 +234,15 @@ func readConfigFile(file *os.File) map[string]string {
 			fmt.Fprintf(os.Stderr, "  ! ignoring invalid config line: %s\n", line)
 			continue
 		}
-		switch key = strings.TrimSpace(key); key {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		switch key {
 		case "OPENAI_PROVIDER", "OPENAI_MODEL", "OPENAI_BASE_URL", "COMMIT_PILOT_CONVENTIONAL_COMMITS", "COMMIT_PILOT_TICKET_PREFIX", "COMMIT_PILOT_IMPERATIVE_TONE", "COMMIT_PILOT_MAX_SUBJECT_LENGTH", "COMMIT_PILOT_BODY_STYLE":
-			values[key] = strings.TrimSpace(value)
+			if !validConfigValue(key, value) {
+				fmt.Fprintf(os.Stderr, "  ! ignoring invalid config value for %s\n", key)
+				continue
+			}
+			values[key] = value
 		default:
 			fmt.Fprintf(os.Stderr, "  ! ignoring unsupported config key: %s\n", key)
 		}
@@ -245,6 +251,19 @@ func readConfigFile(file *os.File) map[string]string {
 		fmt.Fprintf(os.Stderr, "  ! could not read config file: %v\n", err)
 	}
 	return values
+}
+
+func validConfigValue(key, value string) bool {
+	switch key {
+	case "COMMIT_PILOT_CONVENTIONAL_COMMITS", "COMMIT_PILOT_IMPERATIVE_TONE":
+		_, err := strconv.ParseBool(value)
+		return err == nil
+	case "COMMIT_PILOT_MAX_SUBJECT_LENGTH":
+		length, err := strconv.Atoi(value)
+		return err == nil && length > 0
+	default:
+		return true
+	}
 }
 
 func configValue(name string, defaults map[string]string) string {

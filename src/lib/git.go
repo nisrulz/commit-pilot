@@ -3,6 +3,7 @@ package lib
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ func GitRun(args ...string) (string, error) {
 				return string(out), nil
 			}
 			msg := strings.TrimSpace(string(ee.Stderr))
-			return "", fmt.Errorf(msg)
+			return "", errors.New(msg)
 		}
 		return "", fmt.Errorf("git is not installed or not working")
 	}

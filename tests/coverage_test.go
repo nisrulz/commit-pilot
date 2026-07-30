@@ -311,6 +311,19 @@ func TestConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestConfigDefaultsRejectsInvalidPreferenceValues(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	content := "COMMIT_PILOT_CONVENTIONAL_COMMITS=perhaps\nCOMMIT_PILOT_MAX_SUBJECT_LENGTH=0\n"
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	defaults := lib.ConfigDefaults()
+	if len(defaults) != 0 {
+		t.Fatalf("invalid preferences should be ignored: %#v", defaults)
+	}
+}
+
 func TestConfigDefaultsCreatesFile(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv(lib.ConfigDirEnv, configDir)
