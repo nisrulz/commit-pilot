@@ -552,6 +552,19 @@ func TestFilterFilesHonorsIncludeAndExclude(t *testing.T) {
 	}
 }
 
+func TestIsSensitivePathAvoidsOrdinaryNames(t *testing.T) {
+	for _, path := range []string{"src/monkey.go", "src/keyboard.go", "src/clock.go"} {
+		if lib.IsSensitivePath(path) {
+			t.Fatalf("ordinary path marked sensitive: %s", path)
+		}
+	}
+	for _, path := range []string{".env.local", "keys/id_rsa", "config/api_key.txt", "package-lock.json", "Cargo.lock"} {
+		if !lib.IsSensitivePath(path) {
+			t.Fatalf("sensitive path not detected: %s", path)
+		}
+	}
+}
+
 func TestContextLengthErrorFields(t *testing.T) {
 	err := &lib.ContextLengthError{
 		Message:   "msg",

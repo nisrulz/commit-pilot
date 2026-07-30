@@ -40,7 +40,11 @@ func ShouldIncludePath(path string, includes, excludes []string, allowSensitive 
 }
 
 func IgnorePatterns() []string {
-	data, err := os.ReadFile(".commitpilotignore")
+	path := ".commitpilotignore"
+	if root, err := GitRun("rev-parse", "--show-toplevel"); err == nil {
+		path = filepath.Join(strings.TrimSpace(root), path)
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
@@ -68,5 +72,16 @@ func matches(path string, patterns []string) bool {
 }
 func IsSensitivePath(path string) bool {
 	name := strings.ToLower(filepath.Base(path))
-	return name == ".env" || strings.Contains(name, "secret") || strings.Contains(name, "key") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx") || strings.Contains(name, "lock")
+	if name == ".env" || strings.HasPrefix(name, ".env.") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx") {
+		return true
+	}
+	if strings.Contains(name, "secret") || strings.Contains(name, "credential") || strings.HasSuffix(name, ".key") || strings.HasPrefix(name, "id_") || strings.Contains(name, "private_key") || strings.Contains(name, "api_key") || strings.Contains(name, "apikey") {
+		return true
+	}
+	switch name {
+	case "cargo.lock", "composer.lock", "gemfile.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock":
+		return true
+	default:
+		return strings.HasSuffix(name, ".lock")
+	}
 }
