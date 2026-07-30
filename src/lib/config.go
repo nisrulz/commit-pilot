@@ -72,7 +72,7 @@ func ParseArgs(args []string) (RawFlags, bool) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch a {
-		case "--dry-run":
+		case "--dry-run", "--no-commit":
 			f.DryRun = true
 		case "--cleanup":
 			f.Cleanup = true
@@ -315,6 +315,7 @@ Usage:
   commit-pilot                           # auto-chunk into logical commits
   commit-pilot --single                  # one commit for all changes
   commit-pilot --dry-run                 # preview only
+  commit-pilot --no-commit               # preview only (alias for --dry-run)
   commit-pilot --yes                     # apply proposed commits without prompting
   commit-pilot --doctor                  # check Git and provider setup
   commit-pilot --staged                  # use staged changes only

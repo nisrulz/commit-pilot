@@ -131,6 +131,11 @@ func TestParseArgs(t *testing.T) {
 		t.Fatal("expected DryRun=true")
 	}
 
+	flags, _ = lib.ParseArgs([]string{"--no-commit"})
+	if !flags.DryRun {
+		t.Fatal("expected --no-commit to enable dry-run")
+	}
+
 	flags, showHelp = lib.ParseArgs([]string{"--single", "--yes"})
 	if showHelp || string(flags.Mode) != "1" || !flags.Yes {
 		t.Fatalf("expected --single and --yes to be parsed, got %+v", flags)

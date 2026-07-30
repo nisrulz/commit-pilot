@@ -81,6 +81,8 @@ Use `--plan-out plan.json` to save a generated plan for review. Edit the JSON, t
 
 Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Files that look like secrets, keys, or certificates are skipped unless you pass `--include-sensitive`.
 
+Use `--no-commit` when you want to generate and review a plan without creating commits. It is an alias for `--dry-run`.
+
 ## Check your setup
 
 Run `commit-pilot --doctor` to check the current Git repository, resolved provider
