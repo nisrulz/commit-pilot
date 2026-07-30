@@ -131,7 +131,7 @@ It sets up a temporary git repo with staged changes across docs, config, and cod
 - No changes (empty repo says message)
 - File detection (counts multi-file changes)
 - AI pipeline (git scan reaches AI call)
-- Single commit mode (positional `1` arg)
+- Single commit mode (`--single`)
 - Binary file detection (`.bin` file listed)
 
 The temp directory `.temp-test/` lives in the project root and gets cleaned up when the script finishes.

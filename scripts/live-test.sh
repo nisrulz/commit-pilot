@@ -155,7 +155,7 @@ echo "$OUT" | grep -q "changed files\|changed file" && ok "detects changed files
 echo "$OUT" | grep -q -i "Found\|logical\|Generating\|commit message" && ok "reaches AI stage" || fail "should reach AI stage"
 
 # --- test 4: single mode ---
-OUT=$(run_in "$TESTDIR/repo" "1")
+OUT=$(run_in "$TESTDIR/repo" "--single")
 echo "$OUT" | grep -q -i "Generating\|AI call" && ok "single mode reaches AI stage" || fail "single mode should reach AI stage"
 
 # --- test 5: binary file handling (standalone repo) ---
@@ -168,7 +168,7 @@ git commit --allow-empty -m "init" -q
 printf '\xff\xd8\xff\xe0\x00\x10\x4a\x46\x49\x46' > logo.bin
 git add logo.bin
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/binary" "1")
+OUT=$(run_in "$TESTDIR/binary" "--single")
 echo "$OUT" | grep -q "binary" && ok "detects binary files" || fail "should detect binary files"
 
 # --- test 6: large diff triggers batching ---
@@ -222,7 +222,7 @@ done
 git add -A
 cd "$PROJECT_DIR"
 
-OUT=$(run_in "$TESTDIR/large" "1")
+OUT=$(run_in "$TESTDIR/large" "--single")
 echo "$OUT" | grep -q "changed file\|15" && ok "large diff detects all files" || fail "large diff should detect all files"
 echo "$OUT" | grep -q -i "Generating\|commit message" && ok "large diff processes" || fail "large diff should process"
 
@@ -230,7 +230,7 @@ echo "$OUT" | grep -q -i "Generating\|commit message" && ok "large diff processe
 echo "  • Testing context window configuration..."
 cd "$TESTDIR/repo"
 # Small context window should trigger batching warning
-OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=1000 run_in "$TESTDIR/repo" "1" 2>&1 || true)
+OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=1000 run_in "$TESTDIR/repo" "--single" 2>&1 || true)
 echo "$OUT" | grep -q -i "batch\|Large diff\|token" && ok "small context window triggers batching" || fail "small context window should trigger batching"
 
 # --- test 8: empty diff (no actual changes) ---
@@ -250,7 +250,7 @@ git add -A && git commit -m "initial" -q
 # Stage file without any changes
 git add test.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/emptydiff" "1")
+OUT=$(run_in "$TESTDIR/emptydiff" "--single")
 echo "$OUT" | grep -q -i "No changes\|no diff\|cannot generate\|empty" && ok "empty diff handled" || fail "empty diff should show appropriate message"
 
 # --- test 9: very large single file diff ---
@@ -273,7 +273,7 @@ for i in $(seq 1 200); do
 done >> huge.go
 git add huge.go
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/hugefile" "1")
+OUT=$(run_in "$TESTDIR/hugefile" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|batch\|token\|Large" && ok "large single file processed" || fail "large single file should be processed"
 
 # --- test 10: unicode filenames ---
@@ -299,7 +299,7 @@ echo 'func world() {}' >> "archive.go"
 echo 'func bonjour() {}' >> "cafe.go"
 git add -A
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/unicode" "1")
+OUT=$(run_in "$TESTDIR/unicode" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "unicode filenames handled" || fail "unicode filenames should be handled"
 
 # --- test 11: mixed staged and unstaged changes ---
@@ -328,7 +328,7 @@ git add staged.txt both.txt
 cd "$PROJECT_DIR"
 
 # With staged changes only (staged.txt and both.txt)
-OUT=$(run_in "$TESTDIR/mixed" "1")
+OUT=$(run_in "$TESTDIR/mixed" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "mixed changes processed" || fail "mixed changes should be processed"
 
 # --- test 12: file with special characters in diff ---
@@ -353,7 +353,7 @@ echo "line with newlines" >> special.txt
 echo "line with unicode accents" >> special.txt
 git add special.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/special" "1")
+OUT=$(run_in "$TESTDIR/special" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "special characters handled" || fail "special characters should be handled"
 
 # --- test 13: deleted files ---
@@ -375,7 +375,7 @@ git add -A && git commit -m "initial" -q
 git rm todelete.txt
 echo "modified" > tokeep.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/deleted" "1")
+OUT=$(run_in "$TESTDIR/deleted" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "deleted files handled" || fail "deleted files should be handled"
 
 # --- test 14: renamed files ---
@@ -393,7 +393,7 @@ git add -A && git commit -m "initial" -q
 # Rename the file
 git mv oldname.txt newname.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/renamed" "1")
+OUT=$(run_in "$TESTDIR/renamed" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "renamed files handled" || fail "renamed files should be handled"
 
 # --- test 15: symlinked files ---
@@ -412,7 +412,7 @@ git add -A && git commit -m "initial" -q
 # Modify the real file
 echo "modified content" > real.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/symlink" "1")
+OUT=$(run_in "$TESTDIR/symlink" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "symlinked files handled" || fail "symlinked files should be handled"
 
 # --- test 16: deeply nested directory ---
@@ -430,7 +430,7 @@ git add -A && git commit -m "initial" -q
 echo "modified" > a/b/c/d/e/f/g/deep.txt
 git add a/b/c/d/e/f/g/deep.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/nested" "1")
+OUT=$(run_in "$TESTDIR/nested" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "deeply nested directory handled" || fail "deeply nested directory should be handled"
 
 # --- test 17: file with spaces in path ---
@@ -448,7 +448,7 @@ git add -A && git commit -m "initial" -q
 echo "modified" > "my folder/file with spaces.txt"
 git add "my folder/file with spaces.txt"
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/spaces" "1")
+OUT=$(run_in "$TESTDIR/spaces" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with spaces in path handled" || fail "file with spaces in path should be handled"
 
 # --- test 18: empty file (0 bytes) ---
@@ -465,7 +465,7 @@ git add -A && git commit -m "initial" -q
 echo "was empty" > empty.txt
 git add empty.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/emptyfile" "1")
+OUT=$(run_in "$TESTDIR/emptyfile" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "empty file handled" || fail "empty file should be handled"
 
 # --- test 19: multiple binary formats ---
@@ -485,7 +485,7 @@ git add -A && git commit -m "initial" -q
 dd if=/dev/urandom bs=100 count=10 of=file.gz 2>/dev/null
 git add file.gz
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/multibinary" "1")
+OUT=$(run_in "$TESTDIR/multibinary" "--single")
 echo "$OUT" | grep -q -i "binary" && ok "multiple binary formats handled" || fail "multiple binary formats should be handled"
 
 # --- test 20: small binary file detection ---
@@ -504,7 +504,7 @@ git add -A && git commit -m "initial" -q
 printf '\x1f\x8b\x08\x00\x00\x00\x00\x00' > small.gz
 git add small.gz
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/smallbinary" "1")
+OUT=$(run_in "$TESTDIR/smallbinary" "--single")
 # Small binaries may be treated as text, but should not crash
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file\|binary" && ok "small binary files handled" || fail "small binary files should be handled"
 
@@ -521,7 +521,7 @@ git add -A && git commit -m "initial" -q
 printf 'line1\n\n\n\n' > newlines.txt
 git add newlines.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/newlines" "1")
+OUT=$(run_in "$TESTDIR/newlines" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with newlines handled" || fail "file with newlines should be handled"
 
 # --- test 22: pre-commit hook rejection ---
@@ -546,7 +546,7 @@ chmod +x .git/hooks/pre-commit
 echo "modified" > test.txt
 git add test.txt
 cd "$PROJECT_DIR"
-if (cd "$TESTDIR/hooks" && "$BINARY" 1 < /dev/null >/dev/null 2>&1); then
+if (cd "$TESTDIR/hooks" && "$BINARY" --single --yes < /dev/null >/dev/null 2>&1); then
   fail "hook rejection should cause failure"
 else
   ok "hook rejection causes failure"
@@ -574,7 +574,7 @@ git add file1.txt file2.txt
 rm file2.txt
 cd "$PROJECT_DIR"
 # Should handle missing file gracefully
-OUT=$(run_in "$TESTDIR/race" "1" 2>&1 || true)
+OUT=$(run_in "$TESTDIR/race" "--single" 2>&1 || true)
 echo "$OUT" | grep -q -i "Generating\|commit message\|error\|warning\|file" && ok "deleted file race handled" || fail "deleted file race should be handled"
 
 # --- test 24: binary file mixed with text ---
@@ -594,7 +594,7 @@ echo "func updated() {}" >> code.go
 dd if=/dev/urandom bs=1024 count=5 of=image.png 2>/dev/null
 git add -A
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/mixedbin" "1")
+OUT=$(run_in "$TESTDIR/mixedbin" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|binary" && ok "mixed binary/text handled" || fail "mixed binary/text should be handled"
 
 # --- test 25: huge single-file diff triggers cross-LLM-call chunking ---
@@ -637,7 +637,7 @@ git add worker.go
 cd "$PROJECT_DIR"
 
 # Force small context window to ensure chunking is triggered
-OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=8192 run_in "$TESTDIR/hugediff" "1" 2>&1 || true)
+OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=8192 run_in "$TESTDIR/hugediff" "--single" 2>&1 || true)
 echo "$OUT" | grep -qi "Chunk " && ok "huge diff chunked across multiple LLM calls" || fail "huge diff should show 'Chunk 1/N' processing messages"
 echo "$OUT" | grep -qi "Generating\|committed\|dry-run" && ok "huge diff completes successfully" || fail "huge diff should complete successfully"
 
@@ -655,7 +655,7 @@ git add -A && git commit -m "initial" -q
 echo "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy" > long.txt
 git add long.txt
 cd "$PROJECT_DIR"
-OUT=$(run_in "$TESTDIR/truncation" "1")
+OUT=$(run_in "$TESTDIR/truncation" "--single")
 # Subject should be truncated to 100 chars, not crash
 echo "$OUT" | grep -q -i "Generating\|commit message\|committed" && ok "subject truncation handled" || fail "subject truncation should be handled"
 
