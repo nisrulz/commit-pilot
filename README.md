@@ -39,6 +39,8 @@ Configuration can be supplied through environment variables or a local config fi
 | Prompt text | `COMMIT_PILOT_PROMPT` | built-in |
 | Prompt file | `COMMIT_PILOT_PROMPT_FILE` | — |
 | Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
+| Retries | `COMMIT_PILOT_RETRIES` | `2` |
+| Request timeout | `COMMIT_PILOT_TIMEOUT_SECONDS` | `180` |
 | Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
 | Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
 

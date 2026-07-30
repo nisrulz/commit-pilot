@@ -38,9 +38,9 @@ type ChatResponse struct {
 
 // ContextLengthError indicates the input exceeded the model's context window
 type ContextLengthError struct {
-	Message    string
-	Estimated  int
-	Available  int
+	Message   string
+	Estimated int
+	Available int
 }
 
 func (e *ContextLengthError) Error() string {
@@ -67,35 +67,52 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	}
 	apiURL := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-	if cfg.APIKey == "" {
-		req.Header.Del("Authorization")
-	}
-
 	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		if _, ok := err.(*url.Error); ok {
-			return "", fmt.Errorf("could not reach provider at %s", cfg.APIBase)
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	retries := cfg.Retries
+	if retries < 0 {
+		retries = 0
+	}
+	var respBody []byte
+	var status int
+	for attempt := 0; attempt <= retries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
+		if err != nil {
+			cancel()
+			return "", fmt.Errorf("create request: %w", err)
 		}
-		return "", fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
+		req.Header.Set("Content-Type", "application/json")
+		if cfg.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+		}
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
-	if err != nil {
-		return "", fmt.Errorf("could not read AI response")
+		resp, err := client.Do(req)
+		if err == nil {
+			status = resp.StatusCode
+			respBody, err = io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
+			resp.Body.Close()
+		}
+		cancel()
+		if err == nil && status == http.StatusOK {
+			break
+		}
+		if attempt == retries || (err == nil && status != http.StatusTooManyRequests && status < http.StatusInternalServerError) {
+			if err != nil {
+				if _, ok := err.(*url.Error); ok {
+					return "", fmt.Errorf("could not reach provider at %s", cfg.APIBase)
+				}
+				return "", fmt.Errorf("http request: %w", err)
+			}
+			break
+		}
+		time.Sleep(time.Second << attempt)
 	}
 
-	if resp.StatusCode != 200 {
+	if status != http.StatusOK {
 		errMsg := strings.TrimSpace(string(respBody))
 
 		// Detect context length errors from various providers
@@ -113,7 +130,7 @@ func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 			fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), clean)
 			return "", fmt.Errorf("request failed")
 		}
-		return "", fmt.Errorf("request failed (status %d)", resp.StatusCode)
+		return "", fmt.Errorf("request failed (status %d)", status)
 	}
 
 	var chatResp ChatResponse

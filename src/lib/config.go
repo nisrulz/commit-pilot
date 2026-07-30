@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Mode string
@@ -26,6 +27,8 @@ type Config struct {
 	Mode          Mode
 	Prompt        string
 	ContextWindow int
+	Retries       int
+	Timeout       time.Duration
 }
 
 var KnownProviders = map[string]string{
@@ -86,6 +89,8 @@ const (
 	DefaultModel         = "gemma-4-e2b-it-qat"
 	DefaultAPIBase       = "http://localhost:1234/v1"
 	DefaultMaxTokens     = 4096
+	defaultRetries       = 2
+	defaultTimeout       = 180 * time.Second
 )
 
 func ConfigDir() string {
@@ -212,6 +217,15 @@ func ResolveConfig(f RawFlags) Config {
 		}
 	}
 
+	retries := defaultRetries
+	if value, err := strconv.Atoi(os.Getenv("COMMIT_PILOT_RETRIES")); err == nil && value >= 0 {
+		retries = value
+	}
+	timeout := defaultTimeout
+	if value, err := strconv.Atoi(os.Getenv("COMMIT_PILOT_TIMEOUT_SECONDS")); err == nil && value > 0 {
+		timeout = time.Duration(value) * time.Second
+	}
+
 	return Config{
 		Model:         model,
 		APIBase:       apiBase,
@@ -222,6 +236,8 @@ func ResolveConfig(f RawFlags) Config {
 		Mode:          Mode(f.Mode),
 		Prompt:        prompt,
 		ContextWindow: contextWindow,
+		Retries:       retries,
+		Timeout:       timeout,
 	}
 }
 
@@ -244,6 +260,8 @@ Environment variables:
   COMMIT_PILOT_PROMPT          Custom prompt text (overrides default)
   COMMIT_PILOT_PROMPT_FILE     Path to custom prompt file (overrides default)
   COMMIT_PILOT_CONTEXT_WINDOW  Model context window size in tokens (default: 65536)
+  COMMIT_PILOT_RETRIES         Retries for transient provider failures (default: 2)
+  COMMIT_PILOT_TIMEOUT_SECONDS Provider request timeout in seconds (default: 180)
   COMMIT_PILOT_CONFIG_DIR      Directory for configuration (default: ~/.config/commit-pilot)
   COMMIT_PILOT_TMP_DIR         Directory for temporary summaries (default: ~/.commit-pilot/tmp)
 
