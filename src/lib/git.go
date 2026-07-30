@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +18,7 @@ type Changes struct {
 	AllFiles       []string
 	FilesWithDiffs []FileDiff
 	BinaryFiles    []string
+	Fingerprint    string
 }
 
 func GitRun(args ...string) (string, error) {
@@ -94,6 +97,7 @@ func GetGitChanges() (*Changes, error) {
 
 	var withDiffs []FileDiff
 	var binaryFiles []string
+	hash := sha256.New()
 
 	for _, f := range files {
 		var raw string
@@ -113,6 +117,9 @@ func GetGitChanges() (*Changes, error) {
 			}
 			continue
 		}
+		hash.Write([]byte(f))
+		hash.Write([]byte{0})
+		hash.Write([]byte(raw))
 
 		if IsBinaryDiff(raw) {
 			binaryFiles = append(binaryFiles, f)
@@ -125,5 +132,6 @@ func GetGitChanges() (*Changes, error) {
 		AllFiles:       files,
 		FilesWithDiffs: withDiffs,
 		BinaryFiles:    binaryFiles,
+		Fingerprint:    hex.EncodeToString(hash.Sum(nil)),
 	}, nil
 }

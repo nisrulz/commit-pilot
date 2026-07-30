@@ -106,7 +106,7 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
 	if subject == "" {
 		subject = "chore: update"
 	}
-	if !ConfirmCommitPlan([]CommitGroup{{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}}, cfg) {
+	if !ConfirmCommitPlan([]CommitGroup{{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}}, cfg, changes.Fingerprint) {
 		return false
 	}
 	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun) {
@@ -238,7 +238,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	}
 
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(groups), "logical work package")))
-	if !ConfirmCommitPlan(groups, cfg) {
+	if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
 		return target, false
 	}
 	commitFailed := false

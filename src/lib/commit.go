@@ -151,7 +151,7 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool) boo
 	return true
 }
 
-func ConfirmCommitPlan(groups []CommitGroup, cfg Config) bool {
+func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) bool {
 	fmt.Println()
 	fmt.Println("  Proposed commit plan:")
 	for i, group := range groups {
@@ -159,7 +159,15 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config) bool {
 		fmt.Printf("       Files: %s\n", strings.Join(group.Files, ", "))
 	}
 
-	if cfg.DryRun || cfg.Yes {
+	if cfg.DryRun {
+		return true
+	}
+	current, err := GetGitChanges()
+	if err != nil || current.Fingerprint != fingerprint {
+		fmt.Println("  Changes were updated while the plan was being generated. Please run commit-pilot again.")
+		return false
+	}
+	if cfg.Yes {
 		return true
 	}
 
