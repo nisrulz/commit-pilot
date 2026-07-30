@@ -1,6 +1,7 @@
 package lib_test
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -371,6 +372,21 @@ func TestApplyMessagePreferences(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("preferences missing %q: %s", want, got)
 		}
+	}
+}
+
+func TestConfirmCommitPlanDeclinesInjectedInput(t *testing.T) {
+	changes, err := lib.GetGitChanges()
+	if err != nil || len(changes.AllFiles) == 0 {
+		t.Skip("test requires a changed Git worktree")
+	}
+	var output bytes.Buffer
+	cfg := lib.Config{Input: strings.NewReader("n\n"), Output: &output}
+	if lib.ConfirmCommitPlan([]lib.CommitGroup{{Subject: "test: plan", Files: []string{"x"}}}, cfg, changes.Fingerprint) {
+		t.Fatal("expected declined confirmation")
+	}
+	if !strings.Contains(output.String(), "No commits created") {
+		t.Fatalf("missing confirmation output: %s", output.String())
 	}
 }
 

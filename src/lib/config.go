@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -45,6 +46,8 @@ type Config struct {
 	BodyStyle        string
 	Context          context.Context
 	HTTPClient       HTTPDoer
+	Input            io.Reader
+	Output           io.Writer
 }
 
 var KnownProviders = map[string]string{
@@ -346,6 +349,8 @@ func ResolveConfig(f RawFlags) Config {
 		MaxSubjectLength: maxSubjectLength,
 		BodyStyle:        configValue("COMMIT_PILOT_BODY_STYLE", defaults),
 		Context:          context.Background(),
+		Input:            os.Stdin,
+		Output:           os.Stdout,
 	}
 }
 

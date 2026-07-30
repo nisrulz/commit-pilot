@@ -155,14 +155,22 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool, max
 }
 
 func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) bool {
-	fmt.Println()
-	fmt.Println("  Proposed commit plan:")
+	out := cfg.Output
+	if out == nil {
+		out = os.Stdout
+	}
+	in := cfg.Input
+	if in == nil {
+		in = os.Stdin
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "  Proposed commit plan:")
 	for i, group := range groups {
-		fmt.Printf("    %d. %s\n", i+1, group.Subject)
+		fmt.Fprintf(out, "    %d. %s\n", i+1, group.Subject)
 		if description := strings.TrimSpace(group.Description); description != "" {
-			fmt.Printf("       %s\n", description)
+			fmt.Fprintf(out, "       %s\n", description)
 		}
-		fmt.Printf("       Files: %s\n", strings.Join(group.Files, ", "))
+		fmt.Fprintf(out, "       Files: %s\n", strings.Join(group.Files, ", "))
 	}
 
 	if cfg.DryRun {
@@ -170,17 +178,17 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 	}
 	current, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil || current.Fingerprint != fingerprint {
-		fmt.Println("  Changes were updated while the plan was being generated. Please run commit-pilot again.")
+		fmt.Fprintln(out, "  Changes were updated while the plan was being generated. Please run commit-pilot again.")
 		return false
 	}
 	if cfg.Yes {
 		return true
 	}
 
-	fmt.Print("  Apply this plan? [y/N] ")
-	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Fprint(out, "  Apply this plan? [y/N] ")
+	answer, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil || !strings.EqualFold(strings.TrimSpace(answer), "y") {
-		fmt.Println("  No commits created.")
+		fmt.Fprintln(out, "  No commits created.")
 		return false
 	}
 	return true
