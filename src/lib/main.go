@@ -54,8 +54,8 @@ func Main() {
 			Die("read plan: %v", err)
 		}
 		allPaths := AllFilePaths(changes)
-		for i := range groups {
-			groups[i].Files = FilterValidFiles(groups[i].Files, allPaths)
+		if err := ValidatePlan(groups, allPaths); err != nil {
+			Die("invalid plan: %v", err)
 		}
 		if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
 			return
