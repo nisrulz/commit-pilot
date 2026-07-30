@@ -44,6 +44,17 @@ func Main() {
 		return
 	}
 	FilterChanges(changes, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
+	if cfg.PlanLint != "" {
+		groups, err := ReadPlan(cfg.PlanLint)
+		if err != nil {
+			Die("read plan: %v", err)
+		}
+		if err := LintPlan(groups, AllFilePaths(changes)); err != nil {
+			Die("invalid plan: %v", err)
+		}
+		fmt.Println("  Plan is valid.")
+		return
+	}
 
 	if len(changes.FilesWithDiffs) == 0 && len(changes.BinaryFiles) > 0 {
 		fmt.Printf("  %s Only binary files changed \u2014 cannot generate AI commit message.\n", yellow("\u26a1"))

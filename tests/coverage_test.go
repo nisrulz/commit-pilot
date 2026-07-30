@@ -352,6 +352,17 @@ func TestProjectConfigOverridesUserConfig(t *testing.T) {
 	}
 }
 
+func TestLintPlan(t *testing.T) {
+	groups := []lib.CommitGroup{{Subject: "feat: add plan lint", Files: []string{"a.go"}}}
+	if err := lib.LintPlan(groups, []string{"a.go"}); err != nil {
+		t.Fatalf("valid plan: %v", err)
+	}
+	groups[0].Subject = "add plan lint"
+	if err := lib.LintPlan(groups, []string{"a.go"}); err == nil {
+		t.Fatal("expected conventional subject error")
+	}
+}
+
 func TestWarnInsecureHTTP(t *testing.T) {
 	lib.WarnInsecureHTTP("https://api.openai.com/v1", "sk-test")
 	lib.WarnInsecureHTTP("http://localhost:1234/v1", "sk-test")

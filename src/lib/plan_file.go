@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const MaxSubjectLength = 100
+
 func WritePlan(path string, groups []CommitGroup) error {
 	data, err := json.MarshalIndent(groups, "", "  ")
 	if err != nil {
@@ -59,4 +61,43 @@ func ValidatePlan(groups []CommitGroup, validFiles []string) error {
 		return fmt.Errorf("plan does not cover: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+func LintPlan(groups []CommitGroup, validFiles []string) error {
+	if err := ValidatePlan(groups, validFiles); err != nil {
+		return err
+	}
+	var issues []string
+	for i, group := range groups {
+		if len([]rune(group.Subject)) > MaxSubjectLength {
+			issues = append(issues, fmt.Sprintf("group %d subject exceeds %d characters", i+1, MaxSubjectLength))
+		}
+		if !conventionalSubject(group.Subject) {
+			issues = append(issues, fmt.Sprintf("group %d subject is not a conventional commit", i+1))
+		}
+	}
+	if len(issues) > 0 {
+		return fmt.Errorf("%s", strings.Join(issues, "; "))
+	}
+	return nil
+}
+
+func conventionalSubject(subject string) bool {
+	typeEnd := strings.IndexByte(subject, ':')
+	if typeEnd < 1 || typeEnd+2 > len(subject) || subject[typeEnd+1] != ' ' {
+		return false
+	}
+	typeName := subject[:typeEnd]
+	if scopeStart := strings.IndexByte(typeName, '('); scopeStart >= 0 {
+		if !strings.HasSuffix(typeName, ")") || scopeStart == 0 || scopeStart == len(typeName)-2 {
+			return false
+		}
+		typeName = typeName[:scopeStart]
+	}
+	for _, r := range typeName {
+		if !(r >= 'a' && r <= 'z') && r != '-' {
+			return false
+		}
+	}
+	return strings.TrimSpace(subject[typeEnd+2:]) != ""
 }

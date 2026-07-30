@@ -33,6 +33,7 @@ type Config struct {
 	Scope            ChangeScope
 	PlanOut          string
 	Apply            string
+	PlanLint         string
 	Include          []string
 	Exclude          []string
 	IncludeSensitive bool
@@ -62,6 +63,7 @@ type RawFlags struct {
 	Unstaged         bool
 	PlanOut          string
 	Apply            string
+	PlanLint         string
 	Include          []string
 	Exclude          []string
 	IncludeSensitive bool
@@ -94,7 +96,12 @@ func ParseArgs(args []string) (RawFlags, bool) {
 		case "--apply":
 			if i+1 < len(args) {
 				i++
-				f.Apply = args[i]
+			f.Apply = args[i]
+			}
+		case "--plan-lint":
+			if i+1 < len(args) {
+				i++
+				f.PlanLint = args[i]
 			}
 		case "--include":
 			if i+1 < len(args) {
@@ -314,6 +321,7 @@ func ResolveConfig(f RawFlags) Config {
 		Scope:            scope,
 		PlanOut:          f.PlanOut,
 		Apply:            f.Apply,
+		PlanLint:         f.PlanLint,
 		Include:          f.Include,
 		Exclude:          f.Exclude,
 		IncludeSensitive: f.IncludeSensitive,
@@ -334,6 +342,7 @@ Usage:
   commit-pilot --unstaged                # ignore staged changes
   commit-pilot --plan-out <path>         # save generated plan as JSON
   commit-pilot --apply <path>            # apply an edited JSON plan
+  commit-pilot --plan-lint <path>        # validate a saved JSON plan
   commit-pilot --include <glob>          # include matching files only
   commit-pilot --exclude <glob>          # exclude matching files
   commit-pilot --include-sensitive       # allow sensitive-looking files to reach the model
