@@ -156,6 +156,9 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 	fmt.Println("  Proposed commit plan:")
 	for i, group := range groups {
 		fmt.Printf("    %d. %s\n", i+1, group.Subject)
+		if description := strings.TrimSpace(group.Description); description != "" {
+			fmt.Printf("       %s\n", description)
+		}
 		fmt.Printf("       Files: %s\n", strings.Join(group.Files, ", "))
 	}
 
