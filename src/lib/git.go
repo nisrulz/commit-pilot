@@ -37,18 +37,19 @@ func GitRun(args ...string) (string, error) {
 	return string(out), nil
 }
 
-func GitOutputLines(args ...string) []string {
+func GitOutputPaths(args ...string) []string {
+	args = append(args, "-z")
 	out, err := GitRun(args...)
 	if err != nil {
 		return nil
 	}
-	var lines []string
-	for _, f := range strings.Split(strings.TrimSpace(out), "\n") {
+	var paths []string
+	for _, f := range strings.Split(strings.TrimSuffix(out, "\x00"), "\x00") {
 		if f != "" {
-			lines = append(lines, f)
+			paths = append(paths, f)
 		}
 	}
-	return lines
+	return paths
 }
 
 // IsBinaryDiff checks if diff content indicates a binary file
@@ -74,15 +75,15 @@ func GetGitChanges() (*Changes, error) {
 		return nil, err
 	}
 
-	staged := GitOutputLines("diff", "--cached", "--name-only")
+	staged := GitOutputPaths("diff", "--cached", "--name-only")
 	hasStaged := len(staged) > 0
 
 	var files []string
 	if hasStaged {
 		files = staged
 	} else {
-		files = GitOutputLines("diff", "--name-only")
-		untracked := GitOutputLines("ls-files", "--others", "--exclude-standard")
+		files = GitOutputPaths("diff", "--name-only")
+		untracked := GitOutputPaths("ls-files", "--others", "--exclude-standard")
 		seen := make(map[string]bool, len(files))
 		for _, f := range files {
 			seen[f] = true
