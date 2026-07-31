@@ -6,10 +6,47 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
 )
+
+// runListModels prints the models available from the configured provider.
+func runListModels(cfg Config) {
+	models, err := ListProviderModels(cfg)
+	if err != nil {
+		Die("list models: %v", err)
+	}
+	if cfg.JSON {
+		PrintJSON(map[string]any{"models": models})
+	} else {
+		for _, model := range models {
+			fmt.Println(model)
+		}
+	}
+}
+
+// runDoctorCheck verifies the git repository and provider setup, reporting a
+// machine-readable result in JSON mode and exiting non-zero on any failure.
+func runDoctorCheck(cfg Config) {
+	if cfg.JSON {
+		_, gitErr := GitRun("rev-parse", "--show-toplevel")
+		found, providerErr := CheckProvider(cfg)
+		status := "completed"
+		if gitErr != nil || providerErr != nil || !found {
+			status = "error"
+		}
+		PrintJSON(map[string]any{"status": status, "git_repository": gitErr == nil, "model": cfg.Model, "provider_reachable": providerErr == nil, "model_available": found})
+		if gitErr != nil || providerErr != nil || !found {
+			os.Exit(1)
+		}
+		return
+	}
+	if !RunDoctor(cfg) {
+		os.Exit(1)
+	}
+}
 
 func RunDoctor(cfg Config) bool {
 	fmt.Println("  Commit Pilot doctor")

@@ -22,6 +22,16 @@ type Changes struct {
 	Fingerprint    string
 }
 
+// AllFilePaths returns every path known to the changes: the diffed files
+// followed by the binary files.
+func AllFilePaths(changes *Changes) []string {
+	files := make([]string, 0, len(changes.FilesWithDiffs)+len(changes.BinaryFiles))
+	for _, f := range changes.FilesWithDiffs {
+		files = append(files, f.Path)
+	}
+	return append(files, changes.BinaryFiles...)
+}
+
 type ChangeScope int
 
 const (

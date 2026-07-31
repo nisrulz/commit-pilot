@@ -9,23 +9,26 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
+// MaxResponseSize caps how much of a provider response is read.
 const MaxResponseSize = 1 << 20
 
+// HTTPDoer abstracts HTTP calls so tests can inject a fake client.
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+// ChatMessage is one message in an OpenAI-compatible chat conversation.
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
+// ChatRequest is the request body sent to the provider's chat completions API.
 type ChatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []ChatMessage `json:"messages"`
@@ -33,15 +36,17 @@ type ChatRequest struct {
 	MaxTokens   int           `json:"max_tokens"`
 }
 
+// ChatChoice is a single completion returned by the provider.
 type ChatChoice struct {
 	Message ChatMessage `json:"message"`
 }
 
+// ChatResponse is the parsed provider completion response.
 type ChatResponse struct {
 	Choices []ChatChoice `json:"choices"`
 }
 
-// ContextLengthError indicates the input exceeded the model's context window
+// ContextLengthError indicates the input exceeded the model's context window.
 type ContextLengthError struct {
 	Message   string
 	Estimated int
@@ -52,14 +57,15 @@ func (e *ContextLengthError) Error() string {
 	return e.Message
 }
 
-const MaxJSONDepth = 100
-
-var JSONBlockRE = regexp.MustCompile("```(?:json)?\\s*\n(.+?)\n```")
-
+// CallLLM sends a prompt to the configured provider and returns the response
+// text, using the config's context for cancellation and retry handling.
 func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	return CallLLMContext(cfg.Context, prompt, cfg, maxTokens)
 }
 
+// CallLLMContext sends a prompt to the provider with explicit parent context.
+// Transient failures (429, 5xx, network errors) are retried with backoff up to
+// cfg.Retries times; the call can be cancelled through the parent context.
 func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens int) (string, error) {
 	if parent == nil {
 		parent = context.Background()
@@ -141,7 +147,7 @@ func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens
 	if status != http.StatusOK {
 		errMsg := strings.TrimSpace(string(respBody))
 
-		// Detect context length errors from various providers
+		// Detect context length errors from various providers.
 		if IsContextLengthError(errMsg) {
 			return "", &ContextLengthError{
 				Message:   fmt.Sprintf("Input too large for model context window (%s)", cfg.Model),
@@ -150,7 +156,7 @@ func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens
 			}
 		}
 
-		// Try to extract a clean message from provider JSON error responses
+		// Try to extract a clean message from provider JSON error responses.
 		clean := cleanAPIError(errMsg)
 		if clean != "" {
 			fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), clean)
@@ -171,7 +177,8 @@ func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens
 	return chatResp.Choices[0].Message.Content, nil
 }
 
-// IsContextLengthError checks if an error message indicates context length exceeded
+// IsContextLengthError reports whether a provider error message indicates the
+// input exceeded the model's context window.
 func IsContextLengthError(errMsg string) bool {
 	lower := strings.ToLower(errMsg)
 	contextKeywords := []string{
@@ -194,6 +201,8 @@ func IsContextLengthError(errMsg string) bool {
 	return false
 }
 
+// WarnInsecureHTTP warns when an API key would be sent over plain HTTP to a
+// remote host. Local endpoints (localhost/127.0.0.1) are exempt.
 func WarnInsecureHTTP(apiBase, apiKey string) {
 	if apiKey == "" {
 		return
@@ -207,64 +216,4 @@ func WarnInsecureHTTP(apiBase, apiKey string) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "  ! Warning: sending API key over plain HTTP to %s\n", u.Host)
-}
-
-// cleanAPIError extracts a user-facing message from provider JSON error responses
-func cleanAPIError(body string) string {
-	var parsed struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(body), &parsed); err == nil && parsed.Error.Message != "" {
-		return parsed.Error.Message
-	}
-	return ""
-}
-
-func ExtractJSON(text string) (json.RawMessage, error) {
-	text = strings.TrimSpace(text)
-
-	if m := JSONBlockRE.FindStringSubmatch(text); m != nil {
-		text = strings.TrimSpace(m[1])
-	}
-
-	start := -1
-	for i, c := range text {
-		if c == '{' || c == '[' {
-			start = i
-			break
-		}
-	}
-	if start == -1 {
-		return nil, fmt.Errorf("no JSON structure found in AI response")
-	}
-
-	openChar := text[start]
-	closeChar := byte('}')
-	if openChar == '[' {
-		closeChar = ']'
-	}
-
-	depth := 0
-	end := -1
-	for i := start; i < len(text); i++ {
-		if text[i] == openChar {
-			depth++
-			if depth > MaxJSONDepth {
-				return nil, fmt.Errorf("JSON nesting exceeds max depth %d", MaxJSONDepth)
-			}
-		} else if text[i] == closeChar {
-			depth--
-			if depth == 0 {
-				end = i + 1
-				break
-			}
-		}
-	}
-	if end == -1 {
-		return nil, fmt.Errorf("unmatched brackets in AI response")
-	}
-
-	return json.RawMessage(text[start:end]), nil
 }

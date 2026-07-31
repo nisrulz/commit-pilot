@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// Mode selects how changes are turned into commits.
 type Mode string
 
 const (
@@ -19,6 +20,8 @@ const (
 	ModeSingle Mode = "1"
 )
 
+// Config is the fully resolved runtime configuration for a single run. Every
+// value is filled in by ResolveConfig before a run starts.
 type Config struct {
 	Model            string
 	APIBase          string
@@ -51,6 +54,7 @@ type Config struct {
 	Quiet            bool
 }
 
+// KnownProviders maps provider names to their default API base URLs.
 var KnownProviders = map[string]string{
 	"ollama":   "http://localhost:11434/v1",
 	"lmstudio": "http://localhost:1234/v1",
@@ -58,89 +62,12 @@ var KnownProviders = map[string]string{
 	"unsloth":  "http://localhost:8888/v1",
 }
 
+// ProviderDefaults maps provider names to their default model identifiers.
 var ProviderDefaults = map[string]string{
 	"ollama":   "gemma4:e2b-it-qat",
 	"lmstudio": "gemma-4-e2b-it-qat",
 	"openai":   "gpt-4o-mini",
 	"unsloth":  "unsloth/gemma-4-E4B-it-qat-GGUF",
-}
-
-type RawFlags struct {
-	Mode             string
-	DryRun           bool
-	Cleanup          bool
-	Yes              bool
-	Doctor           bool
-	ListModels       bool
-	JSON             bool
-	Quiet            bool
-	Staged           bool
-	Unstaged         bool
-	PlanOut          string
-	Apply            string
-	PlanLint         string
-	Include          []string
-	Exclude          []string
-	IncludeSensitive bool
-}
-
-func ParseArgs(args []string) (RawFlags, bool) {
-	var f RawFlags
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch a {
-		case "--dry-run", "--no-commit":
-			f.DryRun = true
-		case "--cleanup":
-			f.Cleanup = true
-		case "--single":
-			f.Mode = "1"
-		case "--yes":
-			f.Yes = true
-		case "--doctor":
-			f.Doctor = true
-		case "--list-models":
-			f.ListModels = true
-		case "--json":
-			f.JSON = true
-		case "--quiet":
-			f.Quiet = true
-		case "--staged":
-			f.Staged = true
-		case "--unstaged":
-			f.Unstaged = true
-		case "--plan-out":
-			if i+1 < len(args) {
-				i++
-				f.PlanOut = args[i]
-			}
-		case "--apply":
-			if i+1 < len(args) {
-				i++
-				f.Apply = args[i]
-			}
-		case "--plan-lint":
-			if i+1 < len(args) {
-				i++
-				f.PlanLint = args[i]
-			}
-		case "--include":
-			if i+1 < len(args) {
-				i++
-				f.Include = append(f.Include, args[i])
-			}
-		case "--exclude":
-			if i+1 < len(args) {
-				i++
-				f.Exclude = append(f.Exclude, args[i])
-			}
-		case "--include-sensitive":
-			f.IncludeSensitive = true
-		case "-h", "--help":
-			return f, true
-		}
-	}
-	return f, false
 }
 
 const (
@@ -162,6 +89,7 @@ const (
 	defaultTimeout       = 180 * time.Second
 )
 
+// ConfigDir returns the directory that holds the user configuration file.
 func ConfigDir() string {
 	if dir := os.Getenv(ConfigDirEnv); dir != "" {
 		return dir
@@ -174,6 +102,7 @@ func ConfigDir() string {
 	return filepath.Join(home, ".config", "commit-pilot")
 }
 
+// TmpDir returns the directory where per-run summaries are written.
 func TmpDir() string {
 	if dir := os.Getenv(TmpDirEnv); dir != "" {
 		return dir
@@ -186,6 +115,9 @@ func TmpDir() string {
 	return filepath.Join(home, ".commit-pilot", "tmp")
 }
 
+// ConfigDefaults loads provider and message-preference defaults from the user
+// config file, overlaid with any project-level .commit-pilot/config.env.
+// The user config file is created with the built-in defaults when missing.
 func ConfigDefaults() map[string]string {
 	path := filepath.Join(ConfigDir(), configFileName)
 	file, err := os.Open(path)
@@ -219,6 +151,8 @@ func ConfigDefaults() map[string]string {
 	return values
 }
 
+// readConfigFile parses a KEY=VALUE config file, skipping comments and empty
+// lines and rejecting unknown or invalid entries.
 func readConfigFile(file *os.File) map[string]string {
 	defer file.Close()
 	values := make(map[string]string)
@@ -252,6 +186,8 @@ func readConfigFile(file *os.File) map[string]string {
 	return values
 }
 
+// validConfigValue reports whether a config value passes the type checks for
+// its key (booleans parse, subject lengths are positive).
 func validConfigValue(key, value string) bool {
 	switch key {
 	case "COMMIT_PILOT_CONVENTIONAL_COMMITS", "COMMIT_PILOT_IMPERATIVE_TONE":
@@ -265,6 +201,8 @@ func validConfigValue(key, value string) bool {
 	}
 }
 
+// configValue returns the value for a setting, preferring the environment over
+// the config file defaults.
 func configValue(name string, defaults map[string]string) string {
 	if value, ok := os.LookupEnv(name); ok {
 		return value
@@ -272,6 +210,9 @@ func configValue(name string, defaults map[string]string) string {
 	return defaults[name]
 }
 
+// ResolveConfig builds the effective configuration from command-line flags,
+// environment variables, and the config file, applying defaults for anything
+// left unset.
 func ResolveConfig(f RawFlags) Config {
 	defaults := ConfigDefaults()
 	model := configValue("OPENAI_MODEL", defaults)
@@ -377,6 +318,7 @@ func ResolveConfig(f RawFlags) Config {
 	}
 }
 
+// configBool resolves a boolean setting with a fallback for unset values.
 func configBool(name string, defaults map[string]string, fallback bool) bool {
 	value := configValue(name, defaults)
 	if value == "" {
@@ -384,45 +326,4 @@ func configBool(name string, defaults map[string]string, fallback bool) bool {
 	}
 	parsed, err := strconv.ParseBool(value)
 	return err == nil && parsed
-}
-
-func printHelp() {
-	fmt.Print(`commit-pilot: AI-powered git commit messages that know what you changed.
-
-Usage:
-  commit-pilot                           # auto-chunk into logical commits
-  commit-pilot --single                  # one commit for all changes
-  commit-pilot --dry-run                 # preview only
-  commit-pilot --no-commit               # preview only (alias for --dry-run)
-  commit-pilot --yes                     # apply proposed commits without prompting
-  commit-pilot --doctor                  # check Git and provider setup
-  commit-pilot --list-models             # list models available from the provider
-  commit-pilot --json                    # emit machine-readable output
-  commit-pilot --quiet                   # hide progress output
-  commit-pilot --staged                  # use staged changes only
-  commit-pilot --unstaged                # ignore staged changes
-  commit-pilot --plan-out <path>         # save generated plan as JSON
-  commit-pilot --apply <path>            # apply an edited JSON plan
-  commit-pilot --plan-lint <path>        # validate a saved JSON plan
-  commit-pilot --include <glob>          # include matching files only
-  commit-pilot --exclude <glob>          # exclude matching files
-  commit-pilot --include-sensitive       # allow sensitive-looking files to reach the model
-  commit-pilot --cleanup                 # remove temp files on success
-
-Environment variables:
-  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai, unsloth
-  OPENAI_MODEL                 Model name (default: gemma-4-e2b-it-qat)
-  OPENAI_BASE_URL              API base URL
-  OPENAI_API_KEY               API key
-  COMMIT_PILOT_PROMPT          Custom prompt text (overrides default)
-  COMMIT_PILOT_PROMPT_FILE     Path to custom prompt file (overrides default)
-  COMMIT_PILOT_CONTEXT_WINDOW  Model context window size in tokens (default: 65536)
-  COMMIT_PILOT_RETRIES         Retries for transient provider failures (default: 2)
-  COMMIT_PILOT_TIMEOUT_SECONDS Provider request timeout in seconds (default: 180)
-  COMMIT_PILOT_CONFIG_DIR      Directory for configuration (default: ~/.config/commit-pilot)
-  COMMIT_PILOT_TMP_DIR         Directory for temporary summaries (default: ~/.commit-pilot/tmp)
-
-Config file:
-  $COMMIT_PILOT_CONFIG_DIR/config.env    Optional provider/model defaults
-`)
 }
