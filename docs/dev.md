@@ -137,9 +137,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1 \
 
 **Unsloth Studio:**
 ```bash
-OPENAI_BASE_URL=http://localhost:8888/v1 \
-  OPENAI_API_KEY=sk-unsloth-... \
-  make test-live
+OPENAI_BASE_URL=http://localhost:8888 make test-live
 ```
 
 The script sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
