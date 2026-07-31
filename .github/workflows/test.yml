@@ -13,6 +13,6 @@ jobs:
         with:
           go-version: "1.26.4"
       - run: go vet ./...
-      - run: go test -count=1 ./tests/ -coverpkg=./src/lib/
+      - run: go test -count=1 ./tests/... -coverpkg=./src/lib/
       - run: go build -o commit-pilot ./src/
       - run: sh -n scripts/live-test.sh
