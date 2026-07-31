@@ -9,14 +9,15 @@ cancellation, confirmation input, config precedence, and Git scope behavior.
 End-to-end tests live in `tests/e2e/`. They build the real CLI binary and run it
 against a mock OpenAI-compatible provider. Together they cover auto and single
 mode commits, plan-out/apply/plan-lint, dry-run, sensitive-file filtering, scope
-flags, `--list-models`, `--doctor`, and provider failures.
+flags, partially staged files, option-like filenames, binary-only commits,
+`--list-models`, `--doctor`, and provider failures.
 
 The install script is covered by an end-to-end test too. It runs
 `scripts/install.sh` against a local mock release server, so the real `curl`,
 `tar`, and checksum tooling all get exercised. The test verifies that the binary
 is installed to `~/go/bin`, that the working directory is left untouched, that a
 stale binary is replaced, and that checksum mismatches and conflicting
-destinations abort the install.
+destinations abort the install. Missing checksum entries fail too.
 
 To point `install.sh` at a mirror, or at a mock server during testing, set
 `COMMIT_PILOT_INSTALL_API_BASE` and `COMMIT_PILOT_INSTALL_DOWNLOAD_BASE`. The
@@ -62,11 +63,12 @@ The script sets up a temporary git repo with staged changes across docs, config,
 - No changes (an empty repo prints a message)
 - Multi-file changes (counts changed files and reaches the AI stage)
 - Single mode (`--single` reaches the AI stage)
-- Binary files (detected and reported; small binaries don't crash; mixed binary and text handled)
-- Large diffs (many files split into window-sized batches; oversized single files chunked across LLM calls)
+- Binary files (small binaries commit without a model call; mixed binary and text changes stay grouped)
+- Large diffs (many files split into window-sized batches; oversized files and long lines chunk across LLM calls)
 - Context window limits (a small window triggers batching warnings)
 - Empty diffs (a staged file with no real change)
 - Staged and unstaged changes (a mixed working tree)
+- Partially staged files (rejected before a model call)
 - Path edge cases (unicode names, spaces, deeply nested directories, symlinks, renames, deletions)
 - Diff edge cases (special characters, empty files, newline-only files)
 - Failure modes (a pre-commit hook rejection fails the run; a file deleted mid-run)

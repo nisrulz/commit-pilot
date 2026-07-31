@@ -2,7 +2,7 @@
 
 Never type `git commit -m "fix stuff"` again.
 
-**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, Unsloth Studio, or any OpenAI-compatible API. **Zero telemetry.** No data leaves your machine.
+**Local-first.** Reads your uncommitted changes, groups related files, and writes conventional commit messages through LMStudio (default), Ollama, Unsloth Studio, or any OpenAI-compatible API. **Zero telemetry.** Diffs only go to the provider you configure. Use a local provider to keep them on your machine.
 
 ![Banner](img/github_banner.webp)
 
@@ -22,7 +22,15 @@ Or build from source:
 make install
 ```
 
-Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
+Requires [Go](https://go.dev/dl/) 1.25+ and GNU Make.
+
+The installer requires a matching SHA-256 checksum before it installs a release.
+Release archives also have GitHub build provenance. You can verify a downloaded
+archive with:
+
+```bash
+gh attestation verify <archive> --repo nisrulz/commit-pilot
+```
 
 ## Configuration
 
@@ -65,9 +73,10 @@ provider, model, and API base on its first run.
 Values set in the environment take precedence over this file. API keys stay
 environment-only.
 
-For repository-specific defaults, add `.commit-pilot/config.env`. Its values
-override the user config, while environment variables still take precedence.
-Commit Pilot never creates this project file.
+For repository-specific message preferences, add `.commit-pilot/config.env`.
+Project files cannot change the provider, model, or API base. Those settings
+come from your environment or user config, so a cloned repository cannot choose
+where your diff is sent. Commit Pilot never creates the project file.
 
 Message preferences work in either config file: `COMMIT_PILOT_CONVENTIONAL_COMMITS`, `COMMIT_PILOT_TICKET_PREFIX`, `COMMIT_PILOT_IMPERATIVE_TONE`, `COMMIT_PILOT_MAX_SUBJECT_LENGTH`, and `COMMIT_PILOT_BODY_STYLE`. Environment values override config values.
 
@@ -90,13 +99,13 @@ commit-pilot --single --yes
 
 Use `--single` to create one commit for all changes.
 
-Use `--plan-out plan.json` to save a generated plan for review. Edit the JSON, then run `commit-pilot --apply plan.json` to validate it against the current changes and apply it.
+Use `--plan-out plan.json` to save a generated plan for review. It never creates commits. Edit the JSON, then run `commit-pilot --apply plan.json` to validate it against the current changes and apply it.
 
 Run `commit-pilot --plan-lint plan.json` to validate an edited plan without applying it. It checks file coverage, duplicate files, and your configured subject format and length.
 
 ## Control files sent to the model
 
-Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Commit Pilot skips files that look like secrets, keys, or certificates unless you pass `--include-sensitive`.
+Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Commit Pilot skips paths that look like secrets, keys, or certificates unless you pass `--include-sensitive`. It prints every skipped path. Dependency lockfiles are included by default.
 
 Use `--no-commit` when you want to generate and review a plan without creating commits. It is an alias for `--dry-run`.
 
@@ -122,9 +131,11 @@ Commit Pilot automatically handles changes that exceed the model's context windo
 
 When an oversized single file is detected, it shows per-chunk progress: `Chunk 2/5 of big.go`.
 
+Auto mode summarizes up to four files at a time and keeps their original order for planning. Binary-only changes use `chore: update binary assets` without calling the model.
+
 ### Dynamic context window (LM Studio)
 
-When using LM Studio, commit-pilot automatically determines the optimal context window:
+When generating with LM Studio, commit-pilot automatically determines the optimal context window:
 - Checks available system RAM (reserves 5 GB for OS and apps)
 - Queries the loaded model's `max_context_length` via LM Studio's REST API
 - Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
@@ -173,7 +184,9 @@ See [how-it-works.md](docs/how-it-works.md).
 
 ## Privacy
 
-**Zero telemetry.** Commit Pilot never phones home. No callbacks, no analytics, and no data leaves your machine.
+**Zero telemetry.** Commit Pilot has no analytics or callbacks. It sends selected diffs to the provider shown at the start of a run. Local providers keep that data on your machine. Remote providers receive it over HTTPS. Project config files cannot change the provider endpoint.
+
+Commit Pilot refuses partially staged files because widening a hunk selection would commit code you did not review. Commit or stash one side of the file, then run the command again.
 
 ## Requirements
 

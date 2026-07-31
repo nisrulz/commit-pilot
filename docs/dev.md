@@ -2,6 +2,8 @@
 
 ## Build
 
+Commit Pilot requires Go 1.25 or newer.
+
 ```bash
 make build
 ```
@@ -102,4 +104,6 @@ git push origin v0.1.0
 
 This triggers the [GitHub Actions](../.github/workflows/release.yml) workflow.
 It builds binaries for macOS, Linux, and Windows and creates a GitHub Release
-with checksums.
+with checksums. The workflow pins every action and the GoReleaser version. The
+installer aborts if the matching archive checksum is missing or invalid. GitHub
+also records build provenance for every release archive and the checksum file.

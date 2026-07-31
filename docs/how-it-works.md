@@ -3,13 +3,15 @@
 1. **Git scan** - collects staged or unstaged changes (staged preferred)
 2. **Token estimation** - estimates if diffs fit within model context window
 3. **Batching** - splits large diffs into manageable batches
-4. **AI analysis** - sends diffs to the LLM you configured
+4. **AI analysis** - shows the configured destination, then sends selected diffs to it
 5. **Grouping** - the AI returns conventional commit messages with file groupings
 6. **Review and execution** - shows the plan, waits for confirmation, then stages and commits each logical group
 
 ## Auto-chunk mode (default)
 
-The AI decides the logical commit groups. Commit Pilot preserves those groups for text files and validates that every selected file is covered.
+The AI decides the logical commit groups. Commit Pilot summarizes up to four files at a time, preserves their original order, and validates that every selected file is covered. Oversized files use the same chunking path as single mode.
+
+Binary-only changes skip the provider and use `chore: update binary assets`.
 
 ## Temp files
 
@@ -26,9 +28,10 @@ model, and API-base defaults from `config.env` there, creates the file with the
 LM Studio defaults when missing, and gives environment variables precedence.
 This directory never holds temporary summaries.
 
-For a repository-specific setup, add `.commit-pilot/config.env`. Project values
-override user config, and environment variables override both. Commit Pilot does
-not create the project file.
+For repository-specific message preferences, add `.commit-pilot/config.env`.
+The project file cannot set `OPENAI_PROVIDER`, `OPENAI_MODEL`, or
+`OPENAI_BASE_URL`. Provider settings come from your environment or user config.
+Commit Pilot does not create the project file.
 
 ## Commit confirmation
 
@@ -39,6 +42,10 @@ to apply the plan without a prompt:
 ```bash
 commit-pilot --yes
 ```
+
+Files with both staged and unstaged hunks are rejected before the provider is
+called. Commit or stash one side first so the generated plan matches the exact
+content that will be committed.
 
 Use `--cleanup` to remove the temp file automatically on success:
 
@@ -68,6 +75,9 @@ commit-pilot --dry-run
 commit-pilot --no-commit
 ```
 
+`--plan-out <path>` also implies a dry run. It writes the plan without creating
+commits.
+
 ## Cleanup
 
 Remove temp files automatically on success:
@@ -81,12 +91,12 @@ commit-pilot --cleanup
 When changes exceed the model's context window (default 64k tokens), commit-pilot automatically:
 
 - **Batches** files into groups that fit within the window
-- **Chunks** oversized single files into line-aligned pieces, processed across multiple LLM calls
+- **Chunks** oversized single files into line-aligned pieces where possible, including very long single lines
 - **Merges** chunk results into a single commit message
 
 ### Dynamic context detection (LM Studio)
 
-When using LM Studio with no explicit `COMMIT_PILOT_CONTEXT_WINDOW`, the tool automatically:
+When generating with LM Studio and no explicit `COMMIT_PILOT_CONTEXT_WINDOW`, the tool automatically:
 
 1. Reads available system RAM (reserving 5 GB for OS and apps)
 2. Queries LM Studio's REST API for the loaded model's `max_context_length`
@@ -97,6 +107,19 @@ Configure the context window size to override:
 ```bash
 export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
 ```
+
+Plan linting and plan application do not contact the provider or run context
+detection.
+
+## Provider safety
+
+Commit Pilot only accepts HTTPS provider URLs outside the local machine. Plain
+HTTP remains available for loopback addresses such as `localhost`, `127.0.0.1`,
+and `::1`.
+
+The tool has no telemetry. Selected diffs still go to the configured provider,
+so use LM Studio, Ollama, or another local provider when the code must stay on
+your machine.
 
 ## Output
 
