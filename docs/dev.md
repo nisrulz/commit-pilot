@@ -44,21 +44,31 @@ commit-pilot/
 ├── src/
 │   ├── main.go           # CLI entry point (thin wrapper)
 │   └── lib/
-│       ├── main.go       # Orchestration, mode dispatch
-│       ├── config.go     # CLI parsing, config resolution
-│       ├── git.go        # Git operations
-│       ├── context.go    # Dynamic context window detection
-│       ├── llm.go        # LLM API client, JSON extraction
+│       ├── main.go       # Entry point: flag parsing, dispatch, signal handling
+│       ├── args.go       # Command-line flag parsing
+│       ├── config.go     # Config struct and env/config-file resolution
+│       ├── help.go       # Usage/help text
+│       ├── workflow.go   # Run flows: plan-lint, apply, generate, single/auto mode
+│       ├── git.go        # Git operations and change collection
+│       ├── filter.go     # Include/exclude and sensitive-path filtering
+│       ├── llm.go        # LLM API client with retries and cancellation
+│       ├── json.go       # JSON extraction from model responses
 │       ├── prompt.go     # Prompt loading and formatting
-│       ├── commit.go     # AI commit group parsing and execution
-│       ├── grouping.go   # File categorization, grouping, merging logic
-│       ├── tokens.go     # Token estimation, batch splitting
-│       ├── output.go     # Terminal output helpers (colors, formatting)
+│       ├── group.go      # Commit group domain: parsing, merging, AI grouping
+│       ├── commit.go     # Commit execution and plan confirmation
+│       ├── grouping.go   # Binary-file assignment to commit groups
+│       ├── plan_file.go  # Plan read/write/validate/lint
 │       ├── pipeline.go   # Summarization & planning pipeline
 │       ├── summarize.go  # Per-file diff summarization
+│       ├── tokens.go     # Token estimation and context-fit checks
+│       ├── batch.go      # Batch splitting and diff chunking
+│       ├── context.go    # Dynamic context window detection
+│       ├── doctor.go     # Doctor checks and model listing
+│       ├── output.go     # Terminal/JSON output helpers and fatal errors
 │       └── prompt.txt    # Default prompt templates (embedded)
 ├── tests/
-│   ├── *_test.go         # Unit tests (package lib_test)
+│   ├── *_test.go           # Unit tests (package lib_test)
+│   └── e2e/                # End-to-end CLI tests against a mock provider
 ├── .gitignore
 ├── .goreleaser.yaml
 ├── go.mod
@@ -76,7 +86,7 @@ commit-pilot/
 | `make build` | Build the binary |
 | `make install` | Build and copy to `~/go/bin` |
 | `make vet` | Run static analysis |
-| `make test` | Run unit tests |
+| `make test` | Run unit and end-to-end tests |
 | `make clean` | Remove the binary |
 | `make test-live` | Run live integration test (requires AI provider running) |
 | `make setup-lmstudio` | Download default model for LMStudio |
@@ -85,17 +95,22 @@ commit-pilot/
 
 ## Unit tests
 
-Tests live in `tests/` and use external test package `lib_test`:
+Focused unit tests live in `tests/` (external test package `lib_test`). They
+target individual functions in `src/lib`: plan validation, provider retries,
+cancellation, confirmation input, config precedence, and Git scope behavior.
+
+End-to-end tests live in `tests/e2e/`. They build the real CLI binary and run it
+against a mock OpenAI-compatible provider. Together they cover auto and single
+mode commits, plan-out/apply/plan-lint, dry-run, sensitive-file filtering, scope
+flags, `--list-models`, `--doctor`, and provider failures.
 
 ```bash
 make test
 # or
-go test -count=1 ./tests/ -coverpkg=./src/lib/
+go test -count=1 ./tests/... -coverpkg=./src/lib/
 ```
 
-We measure coverage for the `src/lib` package. Tests cover plan validation,
-provider retries, cancellation, confirmation input, config precedence, and Git
-scope behavior.
+We measure coverage for the `src/lib` package across both suites.
 
 ## Live test
 
