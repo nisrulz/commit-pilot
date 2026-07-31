@@ -46,19 +46,22 @@ echo "Downloading $BIN $tag ($os/$arch)..."
 curl -sfL "$url" -o "$tmpdir/$archive"
 
 checksums_url="$download_base/releases/download/$tag/checksums.txt"
-expected=$(curl -sfL "$checksums_url" | grep " $archive$" | cut -d' ' -f1)
-if [ -n "$expected" ]; then
-  if command -v sha256sum >/dev/null 2>&1; then
-    actual=$(sha256sum "$tmpdir/$archive" | cut -d' ' -f1)
-  else
-    actual=$(shasum -a 256 "$tmpdir/$archive" | cut -d' ' -f1)
-  fi
-  if [ "$actual" != "$expected" ]; then
-    echo "  ! Checksum mismatch — aborting"
-    exit 1
-  fi
-  echo "  ✓ Checksum verified"
+expected=$(curl -sfL "$checksums_url" | awk -v archive="$archive" '$2 == archive { print $1; exit }')
+if [ ${#expected} -ne 64 ] || [ -n "$(printf '%s' "$expected" | tr -d '0-9a-fA-F')" ]; then
+  echo "  ! Missing or invalid checksum for $archive"
+  exit 1
 fi
+expected=$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')
+if command -v sha256sum >/dev/null 2>&1; then
+  actual=$(sha256sum "$tmpdir/$archive" | cut -d' ' -f1)
+else
+  actual=$(shasum -a 256 "$tmpdir/$archive" | cut -d' ' -f1)
+fi
+if [ "$actual" != "$expected" ]; then
+  echo "  ! Checksum mismatch. Aborting."
+  exit 1
+fi
+echo "  ✓ Checksum verified"
 
 # Extract (binary may be in a versioned subdirectory)
 tar xzf "$tmpdir/$archive" -C "$tmpdir"

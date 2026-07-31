@@ -263,6 +263,23 @@ func TestEndToEndInstallScript(t *testing.T) {
 		}
 	})
 
+	t.Run("aborts when checksum entry is missing", func(t *testing.T) {
+		home := t.TempDir()
+		cwd := t.TempDir()
+		missing := newMockRelease(t, "v"+version, archiveName, archiveBytes, "")
+
+		out, err := runInstall(t, cwd, home, missing)
+		if err == nil {
+			t.Fatalf("expected missing checksum failure\n%s", out)
+		}
+		if !strings.Contains(out, "Missing or invalid checksum") {
+			t.Fatalf("missing checksum error:\n%s", out)
+		}
+		if _, err := os.Stat(filepath.Join(home, "go", "bin", "commit-pilot")); !os.IsNotExist(err) {
+			t.Fatalf("binary must not be installed without a checksum: %v", err)
+		}
+	})
+
 	t.Run("aborts when destination is a directory", func(t *testing.T) {
 		home := t.TempDir()
 		cwd := t.TempDir()
