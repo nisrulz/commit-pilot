@@ -63,16 +63,20 @@ func ValidatePlan(groups []CommitGroup, validFiles []string) error {
 	return nil
 }
 
-func LintPlan(groups []CommitGroup, validFiles []string) error {
+func LintPlan(groups []CommitGroup, validFiles []string, cfg Config) error {
 	if err := ValidatePlan(groups, validFiles); err != nil {
 		return err
 	}
+	maxSubjectLength := cfg.MaxSubjectLength
+	if maxSubjectLength <= 0 {
+		maxSubjectLength = MaxSubjectLength
+	}
 	var issues []string
 	for i, group := range groups {
-		if len([]rune(group.Subject)) > MaxSubjectLength {
-			issues = append(issues, fmt.Sprintf("group %d subject exceeds %d characters", i+1, MaxSubjectLength))
+		if len([]rune(group.Subject)) > maxSubjectLength {
+			issues = append(issues, fmt.Sprintf("group %d subject exceeds %d characters", i+1, maxSubjectLength))
 		}
-		if !conventionalSubject(group.Subject) {
+		if cfg.Conventional && !conventionalSubject(group.Subject) {
 			issues = append(issues, fmt.Sprintf("group %d subject is not a conventional commit", i+1))
 		}
 	}

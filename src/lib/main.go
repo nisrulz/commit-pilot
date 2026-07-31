@@ -75,7 +75,7 @@ func Main() {
 		if err != nil {
 			Die("read plan: %v", err)
 		}
-		if err := LintPlan(groups, AllFilePaths(changes)); err != nil {
+		if err := LintPlan(groups, AllFilePaths(changes), cfg); err != nil {
 			Die("invalid plan: %v", err)
 		}
 		if cfg.JSON {

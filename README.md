@@ -95,7 +95,7 @@ Use `--single` to create one commit for all changes.
 
 Use `--plan-out plan.json` to save a generated plan for review. Edit the JSON, then run `commit-pilot --apply plan.json` to validate it against the current changes and apply it.
 
-Run `commit-pilot --plan-lint plan.json` to validate an edited plan without applying it. It checks file coverage, duplicate files, conventional subjects, and the 100-character subject limit.
+Run `commit-pilot --plan-lint plan.json` to validate an edited plan without applying it. It checks file coverage, duplicate files, and your configured subject format and length.
 
 ## Control files sent to the model
 

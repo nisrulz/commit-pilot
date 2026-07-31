@@ -370,12 +370,18 @@ func TestProjectConfigOverridesUserConfig(t *testing.T) {
 
 func TestLintPlan(t *testing.T) {
 	groups := []lib.CommitGroup{{Subject: "feat: add plan lint", Files: []string{"a.go"}}}
-	if err := lib.LintPlan(groups, []string{"a.go"}); err != nil {
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: true}); err != nil {
 		t.Fatalf("valid plan: %v", err)
 	}
 	groups[0].Subject = "add plan lint"
-	if err := lib.LintPlan(groups, []string{"a.go"}); err == nil {
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: true}); err == nil {
 		t.Fatal("expected conventional subject error")
+	}
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: false, MaxSubjectLength: 10}); err == nil {
+		t.Fatal("expected configured subject length error")
+	}
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: false, MaxSubjectLength: 100}); err != nil {
+		t.Fatalf("non-conventional subject should be allowed: %v", err)
 	}
 }
 
