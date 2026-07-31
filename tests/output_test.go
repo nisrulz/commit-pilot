@@ -22,6 +22,13 @@ func TestPrintRunResultJSON(t *testing.T) {
 	lib.SetOutputMode(false, false)
 }
 
+func TestErrorResultJSON(t *testing.T) {
+	data, err := json.Marshal(lib.ErrorResult("provider unavailable"))
+	if err != nil || !strings.Contains(string(data), `"status":"error"`) || !strings.Contains(string(data), `"error":"provider unavailable"`) {
+		t.Fatalf("invalid JSON error result: %s (%v)", data, err)
+	}
+}
+
 func TestWrapText_short(t *testing.T) {
 	lines := lib.WrapText("hello world", 72)
 	if len(lines) != 1 {

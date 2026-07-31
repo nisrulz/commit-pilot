@@ -32,6 +32,16 @@ func PrintRunResult(status string) {
 	}
 }
 
+func PrintError(message string) {
+	if jsonOutput {
+		PrintJSON(ErrorResult(message))
+	}
+}
+
+func ErrorResult(message string) map[string]any {
+	return map[string]any{"status": "error", "error": message}
+}
+
 func PrintJSON(value any) {
 	data, _ := json.Marshal(value)
 	fmt.Println(string(data))

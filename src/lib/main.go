@@ -42,7 +42,11 @@ func Main() {
 		if cfg.JSON {
 			_, gitErr := GitRun("rev-parse", "--show-toplevel")
 			found, providerErr := CheckProvider(cfg)
-			PrintJSON(map[string]any{"git_repository": gitErr == nil, "model": cfg.Model, "provider_reachable": providerErr == nil, "model_available": found})
+			status := "completed"
+			if gitErr != nil || providerErr != nil || !found {
+				status = "error"
+			}
+			PrintJSON(map[string]any{"status": status, "git_repository": gitErr == nil, "model": cfg.Model, "provider_reachable": providerErr == nil, "model_available": found})
 			if gitErr != nil || providerErr != nil || !found {
 				os.Exit(1)
 			}
@@ -362,6 +366,10 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 }
 
 func PrintContextError(err *ContextLengthError) {
+	if IsJSONOutput() {
+		PrintJSON(map[string]any{"status": "error", "error": err.Message, "estimated_tokens": err.Estimated, "context_window": err.Available})
+		return
+	}
 	fmt.Println()
 	fmt.Fprintf(os.Stderr, "  %s %s\n", red("ERROR:"), err.Message)
 	fmt.Fprintf(os.Stderr, "    Estimated tokens: %s\n", FormatNumber(err.Estimated))
@@ -381,7 +389,12 @@ func FormatNumber(n int) string {
 }
 
 func Die(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "  ! "+format+"\n", args...)
+	message := fmt.Sprintf(format, args...)
+	if IsJSONOutput() {
+		PrintError(message)
+	} else {
+		fmt.Fprintf(os.Stderr, "  ! %s\n", message)
+	}
 	os.Exit(1)
 }
 
