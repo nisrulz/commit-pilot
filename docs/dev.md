@@ -12,13 +12,6 @@ Build and install to `$GOPATH/bin`:
 make install
 ```
 
-Run directly after build:
-
-```bash
-make build && ./commit-pilot --dry-run
-make build && ./commit-pilot --single --dry-run
-```
-
 ## Project structure
 
 ```
@@ -32,7 +25,8 @@ commit-pilot/
 │   ├── lmstudio.md       # LMStudio setup
 │   ├── ollama.md         # Ollama setup
 │   ├── openai.md         # OpenAI setup
-│   └── unsloth.md        # Unsloth Studio setup
+│   ├── unsloth.md        # Unsloth Studio setup
+│   └── testing.md        # Unit, e2e, and live test guide
 ├── img/
 │   ├── github_banner.webp
 │   └── logo.svg
@@ -93,66 +87,9 @@ commit-pilot/
 | `make setup-ollama` | Download default model for Ollama |
 | `make uninstall` | Remove from `~/go/bin` |
 
-## Unit tests
+## Testing
 
-Focused unit tests live in `tests/` (external test package `lib_test`). They
-target individual functions in `src/lib`: plan validation, provider retries,
-cancellation, confirmation input, config precedence, and Git scope behavior.
-
-End-to-end tests live in `tests/e2e/`. They build the real CLI binary and run it
-against a mock OpenAI-compatible provider. Together they cover auto and single
-mode commits, plan-out/apply/plan-lint, dry-run, sensitive-file filtering, scope
-flags, `--list-models`, `--doctor`, and provider failures.
-
-```bash
-make test
-# or
-go test -count=1 ./tests/... -coverpkg=./src/lib/
-```
-
-We measure coverage for the `src/lib` package across both suites.
-
-## Live test
-
-The integration test runs commit-pilot against a real AI endpoint.
-
-The script checks that your AI provider is reachable before starting. If it is not, it prints setup instructions.
-
-**LMStudio (default):**
-```bash
-make test-live
-```
-
-**Ollama:**
-```bash
-OPENAI_BASE_URL=http://localhost:11434/v1 make test-live
-```
-
-**OpenAI (or any OpenAI-compatible endpoint):**
-```bash
-OPENAI_BASE_URL=https://api.openai.com/v1 \
-  OPENAI_API_KEY=sk-... \
-  make test-live
-```
-
-**Unsloth Studio:**
-```bash
-OPENAI_BASE_URL=http://localhost:8888 make test-live
-```
-
-The script sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
-
-- Git repo detection (non-git dir says error)
-- No changes (empty repo says message)
-- File detection (counts multi-file changes)
-- AI pipeline (git scan reaches AI call)
-- Single commit mode (`--single`)
-- Binary file detection (`.bin` file listed)
-
-Use `commit-pilot --doctor` to verify a local provider before running the live
-test. `commit-pilot --list-models` shows the model IDs the provider exposes.
-
-The script keeps the temporary directory `.temp-test/` in the project root and cleans it up when it finishes.
+See [testing.md](testing.md) for the unit, end-to-end, and live test suites and how to run them.
 
 ## Releasing
 

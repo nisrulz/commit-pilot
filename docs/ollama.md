@@ -10,8 +10,10 @@ Or download from [ollama.com](https://ollama.com).
 
 ## Download model
 
+Downloads the default model:
+
 ```bash
-ollama pull gemma4:e2b-it-qat
+make setup-ollama
 ```
 
 ## Serve

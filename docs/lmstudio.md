@@ -10,9 +10,10 @@ Or download from [lmstudio.ai](https://lmstudio.ai).
 
 ## Download model
 
+Downloads the default model and starts the server:
+
 ```bash
-lms get gemma-4-e2b-it-qat -y
-lms server start
+make setup-lmstudio
 ```
 
 ## Run commit-pilot
