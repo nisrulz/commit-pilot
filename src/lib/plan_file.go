@@ -25,7 +25,11 @@ func ReadPlan(path string) ([]CommitGroup, error) {
 	}
 	var groups []CommitGroup
 	if err := json.Unmarshal(data, &groups); err != nil || len(groups) == 0 {
-		return nil, fmt.Errorf("plan must contain at least one commit group")
+		var single CommitGroup
+		if err2 := json.Unmarshal(data, &single); err2 == nil && single.Subject != "" {
+			return []CommitGroup{single}, nil
+		}
+		return nil, fmt.Errorf("plan must be a JSON array of commit groups")
 	}
 	return groups, nil
 }
@@ -92,11 +96,19 @@ func conventionalSubject(subject string) bool {
 		return false
 	}
 	typeName := subject[:typeEnd]
+	// Optional breaking-change marker: "feat!" or "feat(scope)!".
+	typeName = strings.TrimSuffix(typeName, "!")
+	if typeName == "" {
+		return false
+	}
 	if scopeStart := strings.IndexByte(typeName, '('); scopeStart >= 0 {
 		if !strings.HasSuffix(typeName, ")") || scopeStart == 0 || scopeStart == len(typeName)-2 {
 			return false
 		}
 		typeName = typeName[:scopeStart]
+		if typeName == "" {
+			return false
+		}
 	}
 	for _, r := range typeName {
 		if !(r >= 'a' && r <= 'z') && r != '-' {
