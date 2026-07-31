@@ -5,20 +5,6 @@ import (
 	"strings"
 )
 
-func FilterValidFiles(candidateFiles, validFiles []string) []string {
-	valid := make(map[string]bool, len(validFiles))
-	for _, f := range validFiles {
-		valid[f] = true
-	}
-	var out []string
-	for _, f := range candidateFiles {
-		if valid[f] {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
 func AssignBinaryFiles(groups []CommitGroup, binaryFiles []string) []CommitGroup {
 	if len(binaryFiles) == 0 || len(groups) == 0 {
 		return groups

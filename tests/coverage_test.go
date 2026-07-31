@@ -385,6 +385,13 @@ func TestLintPlan(t *testing.T) {
 	}
 }
 
+func TestValidatePlanRejectsUnknownGeneratedPath(t *testing.T) {
+	groups := []lib.CommitGroup{{Subject: "feat: generated plan", Files: []string{"known.go", "invented.go"}}}
+	if err := lib.ValidatePlan(groups, []string{"known.go"}); err == nil {
+		t.Fatal("expected unknown path to be rejected")
+	}
+}
+
 func TestApplyMessagePreferences(t *testing.T) {
 	got := lib.ApplyMessagePreferences("prompt", lib.Config{Conventional: false, TicketPrefix: "ABC-", Imperative: true, MaxSubjectLength: 55, BodyStyle: "bulleted"})
 	for _, want := range []string{"Do not require", "ABC-", "imperative", "55", "bulleted"} {
@@ -443,14 +450,6 @@ func TestAssignBinaryFilesEdgeCases(t *testing.T) {
 	result = lib.AssignBinaryFiles(nil, []string{"a.bin"})
 	if result != nil {
 		t.Fatalf("expected nil for nil groups, got %v", result)
-	}
-}
-
-func TestFilterValidFilesEdgeCases(t *testing.T) {
-	valid := []string{"a.go", "b.go"}
-	result := lib.FilterValidFiles(nil, valid)
-	if len(result) != 0 {
-		t.Fatalf("expected empty for nil candidates, got %d", len(result))
 	}
 }
 

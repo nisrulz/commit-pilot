@@ -328,10 +328,6 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	}
 
 	allPaths := AllFilePaths(changes)
-	for i, g := range groups {
-		groups[i].Files = FilterValidFiles(g.Files, allPaths)
-	}
-
 	groups = AssignBinaryFiles(groups, changes.BinaryFiles)
 	if err := ValidatePlan(groups, allPaths); err != nil {
 		Die("invalid generated plan: %v", err)

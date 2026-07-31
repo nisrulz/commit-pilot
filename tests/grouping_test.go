@@ -5,29 +5,6 @@ import (
 	"testing"
 )
 
-func TestFilterValidFiles_allValid(t *testing.T) {
-	valid := []string{"a.go", "b.go", "c.go"}
-	result := lib.FilterValidFiles([]string{"a.go", "b.go"}, valid)
-	if len(result) != 2 {
-		t.Fatalf("expected 2, got %d", len(result))
-	}
-}
-
-func TestFilterValidFiles_someInvalid(t *testing.T) {
-	valid := []string{"a.go"}
-	result := lib.FilterValidFiles([]string{"a.go", "b.go", "c.go"}, valid)
-	if len(result) != 1 || result[0] != "a.go" {
-		t.Fatalf("expected only a.go, got %v", result)
-	}
-}
-
-func TestFilterValidFiles_empty(t *testing.T) {
-	result := lib.FilterValidFiles(nil, []string{"a.go"})
-	if len(result) != 0 {
-		t.Fatalf("expected empty, got %v", result)
-	}
-}
-
 func TestAssignBinaryFiles_noBinaries(t *testing.T) {
 	groups := []lib.CommitGroup{{Files: []string{"a.go"}}}
 	result := lib.AssignBinaryFiles(groups, nil)
