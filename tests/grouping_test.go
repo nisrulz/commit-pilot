@@ -39,8 +39,8 @@ func TestAssignBinaryFiles_noBinaries(t *testing.T) {
 func TestAssignBinaryFiles_toExistingGroup(t *testing.T) {
 	groups := []lib.CommitGroup{{Files: []string{"dir/a.go"}}}
 	result := lib.AssignBinaryFiles(groups, []string{"dir/image.bin"})
-	if len(result) != 1 || len(result[0].Files) != 2 {
-		t.Fatalf("expected 2 files in group (a.go + image.bin), got %d", len(result[0].Files))
+	if len(result) != 2 || len(result[0].Files) != 1 || len(result[1].Files) != 1 {
+		t.Fatalf("binary file should remain in its own group: %#v", result)
 	}
 }
 
