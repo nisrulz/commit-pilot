@@ -138,6 +138,9 @@ func TestSplitFilesIntoBatches_chunkedPathPreserved(t *testing.T) {
 	contextWindow := 8192
 	batches := lib.SplitFilesIntoBatches(tmpl, files, contextWindow)
 	for _, b := range batches {
+		if !lib.CanFitInContext(tmpl, b, contextWindow) {
+			t.Fatalf("mixed-size batch does not fit context: %#v", b)
+		}
 		for _, f := range b {
 			if f.Path != "huge.go" {
 				t.Fatalf("expected all chunks to have path huge.go, got %s", f.Path)
@@ -160,6 +163,9 @@ func TestSplitFilesIntoBatches_mixedFileSizes(t *testing.T) {
 	smallFound := false
 	hugeFound := false
 	for _, b := range batches {
+		if !lib.CanFitInContext(tmpl, b, contextWindow) {
+			t.Fatalf("mixed-size batch does not fit context: %#v", b)
+		}
 		for _, f := range b {
 			if f.Path == "small.go" {
 				smallFound = true
@@ -174,6 +180,20 @@ func TestSplitFilesIntoBatches_mixedFileSizes(t *testing.T) {
 	}
 	if !hugeFound {
 		t.Fatal("huge.go should appear in batches (chunked)")
+	}
+}
+
+func TestSplitFilesIntoBatchesSplitsOversizedLine(t *testing.T) {
+	tmpl := "template {files} {diff}"
+	contextWindow := 8192
+	batches := lib.SplitFilesIntoBatches(tmpl, []lib.FileDiff{{Path: "minified.js", Diff: strings.Repeat("x", 50000)}}, contextWindow)
+	if len(batches) < 2 {
+		t.Fatalf("expected oversized line to be split, got %d batch", len(batches))
+	}
+	for _, batch := range batches {
+		if !lib.CanFitInContext(tmpl, batch, contextWindow) {
+			t.Fatalf("oversized line chunk does not fit: %#v", batch)
+		}
 	}
 }
 
@@ -197,7 +217,7 @@ func TestIsChunkedBatch(t *testing.T) {
 			want:  false,
 		},
 		{
-			name: "empty not chunked",
+			name:  "empty not chunked",
 			batch: []lib.FileDiff{},
 			want:  false,
 		},

@@ -23,35 +23,36 @@ const (
 // Config is the fully resolved runtime configuration for a single run. Every
 // value is filled in by ResolveConfig before a run starts.
 type Config struct {
-	Model            string
-	APIBase          string
-	APIKey           string
-	DryRun           bool
-	Cleanup          bool
-	Yes              bool
-	Mode             Mode
-	Prompt           string
-	ContextWindow    int
-	Retries          int
-	Timeout          time.Duration
-	Scope            ChangeScope
-	PlanOut          string
-	Apply            string
-	PlanLint         string
-	Include          []string
-	Exclude          []string
-	IncludeSensitive bool
-	Conventional     bool
-	TicketPrefix     string
-	Imperative       bool
-	MaxSubjectLength int
-	BodyStyle        string
-	Context          context.Context
-	HTTPClient       HTTPDoer
-	Input            io.Reader
-	Output           io.Writer
-	JSON             bool
-	Quiet            bool
+	Model             string
+	APIBase           string
+	APIKey            string
+	DryRun            bool
+	Cleanup           bool
+	Yes               bool
+	Mode              Mode
+	Prompt            string
+	ContextWindow     int
+	AutoContextWindow bool
+	Retries           int
+	Timeout           time.Duration
+	Scope             ChangeScope
+	PlanOut           string
+	Apply             string
+	PlanLint          string
+	Include           []string
+	Exclude           []string
+	IncludeSensitive  bool
+	Conventional      bool
+	TicketPrefix      string
+	Imperative        bool
+	MaxSubjectLength  int
+	BodyStyle         string
+	Context           context.Context
+	HTTPClient        HTTPDoer
+	Input             io.Reader
+	Output            io.Writer
+	JSON              bool
+	Quiet             bool
 }
 
 // KnownProviders maps provider names to their default API base URLs.
@@ -144,11 +145,24 @@ func ConfigDefaults() map[string]string {
 		projectPath := filepath.Join(strings.TrimSpace(root), ".commit-pilot", configFileName)
 		if project, err := os.Open(projectPath); err == nil {
 			for key, value := range readConfigFile(project) {
-				values[key] = value
+				if isProjectPreference(key) {
+					values[key] = value
+				} else {
+					fmt.Fprintf(os.Stderr, "  ! ignoring non-message setting %s from project config\n", key)
+				}
 			}
 		}
 	}
 	return values
+}
+
+func isProjectPreference(key string) bool {
+	switch key {
+	case "COMMIT_PILOT_CONVENTIONAL_COMMITS", "COMMIT_PILOT_TICKET_PREFIX", "COMMIT_PILOT_IMPERATIVE_TONE", "COMMIT_PILOT_MAX_SUBJECT_LENGTH", "COMMIT_PILOT_BODY_STYLE":
+		return true
+	default:
+		return false
+	}
 }
 
 // readConfigFile parses a KEY=VALUE config file, skipping comments and empty
@@ -164,7 +178,7 @@ func readConfigFile(file *os.File) map[string]string {
 		}
 		key, value, ok := strings.Cut(line, "=")
 		if !ok {
-			fmt.Fprintf(os.Stderr, "  ! ignoring invalid config line: %s\n", line)
+			fmt.Fprintln(os.Stderr, "  ! ignoring invalid config line")
 			continue
 		}
 		key = strings.TrimSpace(key)
@@ -256,14 +270,11 @@ func ResolveConfig(f RawFlags) Config {
 	}
 
 	contextWindow := defaultContextWindow
+	autoContextWindow := provider == "lmstudio"
 	if cw := os.Getenv("COMMIT_PILOT_CONTEXT_WINDOW"); cw != "" {
+		autoContextWindow = false
 		if v, err := strconv.Atoi(cw); err == nil && v > 0 {
 			contextWindow = v
-		}
-	} else if provider == "lmstudio" {
-		d := DetectContextWindow(apiBase)
-		if d > 0 {
-			contextWindow = d
 		}
 	}
 
@@ -287,34 +298,35 @@ func ResolveConfig(f RawFlags) Config {
 	}
 
 	return Config{
-		Model:            model,
-		APIBase:          apiBase,
-		APIKey:           apiKey,
-		DryRun:           f.DryRun,
-		Cleanup:          f.Cleanup,
-		Yes:              f.Yes,
-		Mode:             Mode(f.Mode),
-		Prompt:           prompt,
-		ContextWindow:    contextWindow,
-		Retries:          retries,
-		Timeout:          timeout,
-		Scope:            scope,
-		PlanOut:          f.PlanOut,
-		Apply:            f.Apply,
-		PlanLint:         f.PlanLint,
-		Include:          f.Include,
-		Exclude:          f.Exclude,
-		IncludeSensitive: f.IncludeSensitive,
-		Conventional:     configBool("COMMIT_PILOT_CONVENTIONAL_COMMITS", defaults, true),
-		TicketPrefix:     configValue("COMMIT_PILOT_TICKET_PREFIX", defaults),
-		Imperative:       configBool("COMMIT_PILOT_IMPERATIVE_TONE", defaults, true),
-		MaxSubjectLength: maxSubjectLength,
-		BodyStyle:        configValue("COMMIT_PILOT_BODY_STYLE", defaults),
-		Context:          context.Background(),
-		Input:            os.Stdin,
-		Output:           os.Stdout,
-		JSON:             f.JSON,
-		Quiet:            f.Quiet,
+		Model:             model,
+		APIBase:           apiBase,
+		APIKey:            apiKey,
+		DryRun:            f.DryRun,
+		Cleanup:           f.Cleanup,
+		Yes:               f.Yes,
+		Mode:              Mode(f.Mode),
+		Prompt:            prompt,
+		ContextWindow:     contextWindow,
+		AutoContextWindow: autoContextWindow,
+		Retries:           retries,
+		Timeout:           timeout,
+		Scope:             scope,
+		PlanOut:           f.PlanOut,
+		Apply:             f.Apply,
+		PlanLint:          f.PlanLint,
+		Include:           f.Include,
+		Exclude:           f.Exclude,
+		IncludeSensitive:  f.IncludeSensitive,
+		Conventional:      configBool("COMMIT_PILOT_CONVENTIONAL_COMMITS", defaults, true),
+		TicketPrefix:      configValue("COMMIT_PILOT_TICKET_PREFIX", defaults),
+		Imperative:        configBool("COMMIT_PILOT_IMPERATIVE_TONE", defaults, true),
+		MaxSubjectLength:  maxSubjectLength,
+		BodyStyle:         configValue("COMMIT_PILOT_BODY_STYLE", defaults),
+		Context:           context.Background(),
+		Input:             os.Stdin,
+		Output:            os.Stdout,
+		JSON:              f.JSON,
+		Quiet:             f.Quiet,
 	}
 }
 

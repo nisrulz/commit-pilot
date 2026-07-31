@@ -35,13 +35,17 @@ func newMockOpenAI(t *testing.T, respond func(prompt string) string) *mockOpenAI
 			body, _ := io.ReadAll(r.Body)
 			var payload struct {
 				Messages []struct {
+					Role    string `json:"role"`
 					Content string `json:"content"`
 				} `json:"messages"`
 			}
 			_ = json.Unmarshal(body, &payload)
 			prompt := ""
-			if len(payload.Messages) > 0 {
-				prompt = payload.Messages[0].Content
+			for _, message := range payload.Messages {
+				if message.Role == "user" {
+					prompt = message.Content
+					break
+				}
 			}
 			m.mu.Lock()
 			m.chatCalls++

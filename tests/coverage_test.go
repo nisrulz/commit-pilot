@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	lib "github.com/nisrulz/commit-pilot/src/lib"
@@ -36,6 +37,16 @@ func TestParseCommitGroup(t *testing.T) {
 	_, err = lib.ParseCommitGroup("")
 	if err == nil {
 		t.Fatal("expected error for empty input")
+	}
+}
+
+func TestParseCommitGroupSanitizesModelText(t *testing.T) {
+	group, err := lib.ParseCommitGroup(`{"subject":"fix:\u001b[31m safe\nsubject","description":"body\u001b]52;clipboard\u202ereversed"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(group.Subject+group.Description, "\x1b\r") || strings.ContainsRune(group.Description, '\u202e') || strings.Contains(group.Subject, "\n") {
+		t.Fatalf("control characters were preserved: %#v", group)
 	}
 }
 
@@ -147,6 +158,18 @@ func TestParseArgs(t *testing.T) {
 	flags, showHelp = lib.ParseArgs([]string{"--doctor"})
 	if showHelp || !flags.Doctor {
 		t.Fatalf("expected --doctor to be parsed, got %+v", flags)
+	}
+
+	flags, _ = lib.ParseArgs([]string{"--plan-out", "plan.json"})
+	if flags.Error != "" || !flags.DryRun {
+		t.Fatalf("--plan-out should imply dry-run, got %+v", flags)
+	}
+
+	for _, args := range [][]string{{"--unknown"}, {"--apply"}, {"--apply", ""}, {"--staged", "--unstaged"}, {"--doctor", "--list-models"}, {"--doctor", "--plan-out", "plan.json"}} {
+		flags, _ = lib.ParseArgs(args)
+		if flags.Error == "" {
+			t.Fatalf("expected argument error for %v", args)
+		}
 	}
 }
 
@@ -341,30 +364,35 @@ func TestConfigDefaultsCreatesFile(t *testing.T) {
 	}
 }
 
-func TestProjectConfigOverridesUserConfig(t *testing.T) {
+func TestProjectConfigCannotOverrideProvider(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv(lib.ConfigDirEnv, configDir)
-	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte("OPENAI_MODEL=user-model\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte("OPENAI_PROVIDER=openai\nOPENAI_MODEL=user-model\nOPENAI_BASE_URL=https://trusted.test/v1\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	root, err := lib.GitRun("rev-parse", "--show-toplevel")
-	if err != nil {
-		t.Skip("test requires Git repository")
-	}
-	projectDir := filepath.Join(strings.TrimSpace(root), ".commit-pilot")
+	repo := newGitRepo(t)
+	t.Chdir(repo)
+	projectDir := filepath.Join(repo, ".commit-pilot")
 	projectConfig := filepath.Join(projectDir, "config.env")
 	if err := os.MkdirAll(projectDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(projectConfig, []byte("OPENAI_MODEL=project-model\n"), 0600); err != nil {
+	projectValues := "OPENAI_PROVIDER=ollama\nOPENAI_MODEL=project-model\nOPENAI_BASE_URL=https://attacker.test/v1\nCOMMIT_PILOT_BODY_STYLE=bulleted\n"
+	if err := os.WriteFile(projectConfig, []byte(projectValues), 0600); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		_ = os.Remove(projectConfig)
-		_ = os.Remove(projectDir)
-	})
-	if got := lib.ConfigDefaults()["OPENAI_MODEL"]; got != "project-model" {
-		t.Fatalf("project config should override user config, got %q", got)
+	defaults := lib.ConfigDefaults()
+	if got := defaults["OPENAI_PROVIDER"]; got != "openai" {
+		t.Fatalf("project config overrode user provider: %q", got)
+	}
+	if got := defaults["OPENAI_MODEL"]; got != "user-model" {
+		t.Fatalf("project config overrode user model: %q", got)
+	}
+	if got := defaults["OPENAI_BASE_URL"]; got != "https://trusted.test/v1" {
+		t.Fatalf("project config overrode user API base: %q", got)
+	}
+	if got := defaults["COMMIT_PILOT_BODY_STYLE"]; got != "bulleted" {
+		t.Fatalf("project preference was not applied: %q", got)
 	}
 }
 
@@ -416,6 +444,17 @@ func TestConfirmCommitPlanDeclinesInjectedInput(t *testing.T) {
 	}
 }
 
+func TestConfirmCommitPlanFlattensDisplayedPaths(t *testing.T) {
+	var output bytes.Buffer
+	cfg := lib.Config{DryRun: true, Output: &output}
+	if !lib.ConfirmCommitPlan([]lib.CommitGroup{{Subject: "test: plan", Files: []string{"evil\npath\tname"}}}, cfg, "") {
+		t.Fatal("dry-run plan should be accepted")
+	}
+	if !strings.Contains(output.String(), "Files: evil path name") {
+		t.Fatalf("path was not flattened: %q", output.String())
+	}
+}
+
 func TestListProviderModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models" {
@@ -430,12 +469,38 @@ func TestListProviderModels(t *testing.T) {
 	}
 }
 
-func TestWarnInsecureHTTP(t *testing.T) {
-	lib.WarnInsecureHTTP("https://api.openai.com/v1", "sk-test")
-	lib.WarnInsecureHTTP("http://localhost:1234/v1", "sk-test")
-	lib.WarnInsecureHTTP("http://127.0.0.1:8000/v1", "sk-test")
-	lib.WarnInsecureHTTP("http://example.com/v1", "sk-test")
-	lib.WarnInsecureHTTP("http://example.com/v1", "")
+func TestListProviderModelsDoesNotFollowRedirects(t *testing.T) {
+	var targetCalls atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalls.Add(1)
+		_, _ = w.Write([]byte(`{"data":[{"id":"unexpected"}]}`))
+	}))
+	defer target.Close()
+
+	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/models", http.StatusTemporaryRedirect)
+	}))
+	defer redirect.Close()
+
+	if _, err := lib.ListProviderModels(lib.Config{APIBase: redirect.URL}); err == nil {
+		t.Fatal("provider redirect should be rejected")
+	}
+	if calls := targetCalls.Load(); calls != 0 {
+		t.Fatalf("redirect target received %d requests", calls)
+	}
+}
+
+func TestValidateProviderURL(t *testing.T) {
+	for _, base := range []string{"https://api.openai.com/v1", "http://localhost:1234/v1", "http://127.0.0.1:8000/v1", "http://[::1]:8000/v1"} {
+		if err := lib.ValidateProviderURL(base); err != nil {
+			t.Fatalf("expected %q to be allowed: %v", base, err)
+		}
+	}
+	for _, base := range []string{"http://example.com/v1", "ftp://example.com/v1", "https://user:pass@example.com/v1", "not a URL"} {
+		if err := lib.ValidateProviderURL(base); err == nil {
+			t.Fatalf("expected %q to be rejected", base)
+		}
+	}
 }
 
 func TestAssignBinaryFilesEdgeCases(t *testing.T) {
@@ -448,8 +513,8 @@ func TestAssignBinaryFilesEdgeCases(t *testing.T) {
 	}
 
 	result = lib.AssignBinaryFiles(nil, []string{"a.bin"})
-	if result != nil {
-		t.Fatalf("expected nil for nil groups, got %v", result)
+	if len(result) != 1 || result[0].Files[0] != "a.bin" {
+		t.Fatalf("expected a binary-only group, got %v", result)
 	}
 }
 
@@ -502,7 +567,7 @@ func TestFilterChangesFiltersAllPlanFiles(t *testing.T) {
 		BinaryFiles:    []string{"private.pem"},
 	}
 	lib.FilterChanges(changes, nil, nil, false)
-	if got := lib.AllFilePaths(changes); len(got) != 1 || got[0] != "main.go" {
+	if got := lib.AllFilePaths(changes); len(got) != 2 || got[0] != "main.go" || got[1] != "package-lock.json" {
 		t.Fatalf("unexpected selected files: %v", got)
 	}
 }
@@ -516,12 +581,12 @@ func TestFilterFilesHonorsIncludeAndExclude(t *testing.T) {
 }
 
 func TestIsSensitivePathAvoidsOrdinaryNames(t *testing.T) {
-	for _, path := range []string{"src/monkey.go", "src/keyboard.go", "src/clock.go"} {
+	for _, path := range []string{"src/monkey.go", "src/keyboard.go", "src/clock.go", "package-lock.json", "Cargo.lock"} {
 		if lib.IsSensitivePath(path) {
 			t.Fatalf("ordinary path marked sensitive: %s", path)
 		}
 	}
-	for _, path := range []string{".env.local", "keys/id_rsa", "config/api_key.txt", "package-lock.json", "Cargo.lock"} {
+	for _, path := range []string{".env.local", "keys/id_rsa", "config/api_key.txt", ".npmrc", "release.jks"} {
 		if !lib.IsSensitivePath(path) {
 			t.Fatalf("sensitive path not detected: %s", path)
 		}

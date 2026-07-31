@@ -5,6 +5,7 @@ import (
 	"errors"
 	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func (failingDoer) Do(*http.Request) (*http.Response, error) { return nil, error
 func TestCallLLMContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := lib.CallLLMContext(ctx, "prompt", lib.Config{APIBase: "http://example.test", Timeout: 1, Retries: 1, HTTPClient: failingDoer{}}, 1)
+	_, err := lib.CallLLMContext(ctx, "prompt", lib.Config{APIBase: "http://localhost", Timeout: 1, Retries: 1, HTTPClient: failingDoer{}}, 1)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
@@ -23,10 +24,7 @@ func TestCallLLMContextCancelled(t *testing.T) {
 
 func TestExtractJSON_depthLimit(t *testing.T) {
 	depth := lib.MaxJSONDepth + 10
-	text := "{"
-	for i := 0; i < depth; i++ {
-		text += "{"
-	}
+	text := strings.Repeat("[", depth) + strings.Repeat("]", depth)
 	_, err := lib.ExtractJSON(text)
 	if err == nil {
 		t.Fatal("expected error for deeply nested JSON")
@@ -91,6 +89,32 @@ func TestExtractJSON_nested(t *testing.T) {
 	}
 	if string(raw) != `{"a": {"b": [1, 2, {"c": 3}]}}` {
 		t.Fatalf("unexpected result: %s", string(raw))
+	}
+}
+
+func TestExtractJSONAllowsBracketsInsideStrings(t *testing.T) {
+	raw, err := lib.ExtractJSON(`prefix {"subject":"fix: handle } and ] in text","description":"ok"} suffix`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(raw) != `{"subject":"fix: handle } and ] in text","description":"ok"}` {
+		t.Fatalf("unexpected result: %s", raw)
+	}
+}
+
+func TestExtractJSONSkipsInvalidBalancedCandidate(t *testing.T) {
+	raw, err := lib.ExtractJSON(`prefix {not-json} then {"ok":true}`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(raw) != `{"ok":true}` {
+		t.Fatalf("unexpected result: %s", raw)
+	}
+}
+
+func TestExtractJSONRejectsLargeUnclosedInput(t *testing.T) {
+	if _, err := lib.ExtractJSON(strings.Repeat("[", 50_000)); err == nil {
+		t.Fatal("expected error for unclosed JSON")
 	}
 }
 

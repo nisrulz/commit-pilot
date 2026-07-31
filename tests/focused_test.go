@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	lib "github.com/nisrulz/commit-pilot/src/lib"
@@ -44,7 +45,7 @@ func chatContent(content string) string {
 
 func cfgWithDoer(doer staticDoer) lib.Config {
 	return lib.Config{
-		APIBase:    "http://mock.test/v1",
+		APIBase:    "http://localhost/v1",
 		Model:      "test-model",
 		HTTPClient: doer,
 		Retries:    1,
@@ -122,6 +123,32 @@ func TestSummarizeChangesProviderFailure(t *testing.T) {
 	_, err := lib.SummarizeChanges(cfg, "tpl", []lib.FileDiff{{Path: "a.go", Diff: "x"}}, filepath.Join(t.TempDir(), "s.json"))
 	if err == nil {
 		t.Fatal("expected error when provider call fails")
+	}
+}
+
+func TestSummarizeChangesChunksLargeFilesAndOwnsPath(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(chatContent(`{"file":"invented.go","summary":"chunk","changes":["change"]}`)))
+	}))
+	defer server.Close()
+
+	dst := filepath.Join(t.TempDir(), "summaries.json")
+	cfg := lib.Config{APIBase: server.URL, Model: "test", ContextWindow: 8192}
+	out, err := lib.SummarizeChanges(cfg, "Summarize: {files}\n{diff}", []lib.FileDiff{{Path: "huge.go", Diff: generateHugeDiff(500)}}, dst)
+	if err != nil {
+		t.Fatalf("SummarizeChanges: %v", err)
+	}
+	if calls.Load() < 2 {
+		t.Fatalf("expected multiple chunk requests, got %d", calls.Load())
+	}
+	var summaries []lib.FileSummary
+	if err := json.Unmarshal([]byte(out), &summaries); err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 || summaries[0].File != "huge.go" {
+		t.Fatalf("model replaced code-owned path: %#v", summaries)
 	}
 }
 
@@ -280,6 +307,34 @@ func TestResolveConfigProviderDefaults(t *testing.T) {
 	}
 	if cfg.APIBase != "http://localhost:11434/v1" {
 		t.Fatalf("expected Ollama default base, got %q", cfg.APIBase)
+	}
+}
+
+func TestResolveConfigDefersContextDetection(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"models":[{"key":"test","max_context_length":32768}]}`))
+	}))
+	defer server.Close()
+
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	contents := "OPENAI_PROVIDER=lmstudio\nOPENAI_MODEL=test\nOPENAI_BASE_URL=" + server.URL + "\n"
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OPENAI_PROVIDER", "lmstudio")
+	t.Setenv("OPENAI_MODEL", "test")
+	t.Setenv("OPENAI_BASE_URL", server.URL)
+	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "")
+
+	cfg := lib.ResolveConfig(lib.RawFlags{})
+	if calls != 0 {
+		t.Fatalf("ResolveConfig contacted the provider %d times", calls)
+	}
+	if !cfg.AutoContextWindow {
+		t.Fatal("LM Studio should defer automatic context detection until generation")
 	}
 }
 

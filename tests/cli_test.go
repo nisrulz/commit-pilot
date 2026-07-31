@@ -47,6 +47,19 @@ func TestCLIJSONOutput(t *testing.T) {
 	}
 }
 
+func TestCLIRejectsUnknownArguments(t *testing.T) {
+	binary := buildCLI(t)
+	repo := t.TempDir()
+	configDir := t.TempDir()
+	runGit(t, repo, "init")
+
+	stdout, _, err := runCLI(binary, repo, configDir, "--json", "--unknown")
+	if err == nil {
+		t.Fatal("unknown argument should fail")
+	}
+	assertJSONStatus(t, stdout, "error")
+}
+
 func buildCLI(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()

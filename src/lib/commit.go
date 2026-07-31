@@ -11,11 +11,14 @@ import (
 // ExecuteCommit stages the given files and creates a commit with the provided
 // subject and description. In dry-run mode nothing is committed. It returns
 // false when there is nothing to commit or the commit fails.
-func ExecuteCommit(files []string, subject, description string, dryRun bool, maxSubjectLength int) bool {
+func ExecuteCommit(files []string, subject, description string, dryRun bool, maxSubjectLength int, scope ChangeScope) bool {
 	if len(files) == 0 {
 		return false
 	}
 
+	normalized := NormalizeCommitGroup(CommitGroup{Subject: subject, Description: description})
+	subject = normalized.Subject
+	description = normalized.Description
 	subject = strings.TrimSpace(subject)
 	subject = strings.ReplaceAll(subject, "\n", " ")
 	subject = strings.ReplaceAll(subject, "\r", "")
@@ -31,9 +34,11 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool, max
 	}
 
 	if !dryRun {
-		if _, err := GitRun(append([]string{"add"}, files...)...); err != nil {
-			fmt.Fprintf(os.Stderr, "  ! git add failed: %v\n", err)
-			return false
+		if scope != ScopeStaged {
+			if _, err := GitRun(append([]string{"add", "--"}, files...)...); err != nil {
+				fmt.Fprintf(os.Stderr, "  ! git add failed: %v\n", err)
+				return false
+			}
 		}
 		commitArgs := append([]string{"commit", "--only", "-m", subject, "-m", description, "--"}, files...)
 		if _, err := GitRun(commitArgs...); err != nil {
@@ -65,11 +70,12 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "  Proposed commit plan:")
 	for i, group := range groups {
+		group = NormalizeCommitGroup(group)
 		fmt.Fprintf(out, "    %d. %s\n", i+1, group.Subject)
 		if description := strings.TrimSpace(group.Description); description != "" {
 			fmt.Fprintf(out, "       %s\n", description)
 		}
-		fmt.Fprintf(out, "       Files: %s\n", strings.Join(group.Files, ", "))
+		fmt.Fprintf(out, "       Files: %s\n", strings.Join(sanitizePaths(group.Files), ", "))
 	}
 
 	if cfg.DryRun {

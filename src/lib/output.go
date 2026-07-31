@@ -54,7 +54,7 @@ func Die(format string, args ...any) {
 	if IsJSONOutput() {
 		PrintError(message)
 	} else {
-		fmt.Fprintf(os.Stderr, "  ! %s\n", message)
+		fmt.Fprintf(os.Stderr, "  ! %s\n", sanitizeLine(message, 2000))
 	}
 	os.Exit(1)
 }
@@ -66,7 +66,7 @@ func PrintContextError(err *ContextLengthError) {
 		return
 	}
 	fmt.Println()
-	fmt.Fprintf(os.Stderr, "  %s %s\n", red("ERROR:"), err.Message)
+	fmt.Fprintf(os.Stderr, "  %s %s\n", red("ERROR:"), sanitizeLine(err.Message, 2000))
 	fmt.Fprintf(os.Stderr, "    Estimated tokens: %s\n", FormatNumber(err.Estimated))
 	fmt.Fprintf(os.Stderr, "    Context window:   %s tokens\n", FormatNumber(err.Available))
 	fmt.Println()
@@ -98,16 +98,6 @@ func reportNoChanges(cfg Config) {
 		PrintRunResult("no_changes")
 	} else if !cfg.Quiet {
 		fmt.Printf("  %s No changes to commit.\n", yellow("\u26a1"))
-	}
-}
-
-// reportBinaryOnly prints the outcome when only binary files changed, which
-// cannot be summarized into an AI commit message.
-func reportBinaryOnly(cfg Config) {
-	if cfg.JSON {
-		PrintRunResult("binary_only")
-	} else if !cfg.Quiet {
-		fmt.Printf("  %s Only binary files changed \u2014 cannot generate AI commit message.\n", yellow("\u26a1"))
 	}
 }
 
@@ -149,20 +139,22 @@ func PrintStep(msg string) {
 	if quietOutput {
 		return
 	}
-	fmt.Printf("  %s %s\n", green("*"), msg)
+	fmt.Printf("  %s %s\n", green("*"), sanitizeLine(msg, 2000))
 }
 
 func PrintProcessing(msg string) {
 	if quietOutput {
 		return
 	}
-	fmt.Printf("  %s %s\n", yellow(">"), msg)
+	fmt.Printf("  %s %s\n", yellow(">"), sanitizeLine(msg, 2000))
 }
 
 func PrintCommitSection(subject, description string, filePaths []string, dryRun bool) {
 	if quietOutput {
 		return
 	}
+	subject = sanitizeText(subject, MaxSubjectLength)
+	description = sanitizeText(description, MaxDescriptionLength)
 	statusTag := "committed!"
 	colorFn := green
 	iconChar := "*"
@@ -184,7 +176,7 @@ func PrintCommitSection(subject, description string, filePaths []string, dryRun 
 	fmt.Println()
 	fmt.Printf("    %s %s\n", cyan(">"), cyan("files:"))
 	for _, f := range filePaths {
-		fmt.Printf("      %s %s\n", cyan("-"), cyan(f))
+		fmt.Printf("      %s %s\n", cyan("-"), cyan(sanitizePath(f)))
 	}
 	fmt.Println()
 	fmt.Printf("  %s %s\n", colorFn(iconChar), colorFn(statusTag))

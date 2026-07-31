@@ -3,12 +3,14 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const MinContextFloor = 256
@@ -44,8 +46,12 @@ func DetectContextWindow(apiBase string) int {
 }
 
 func QueryModelInfo(apiBase string) (*ModelInfo, error) {
+	if err := ValidateProviderURL(apiBase); err != nil {
+		return nil, err
+	}
 	url := fmt.Sprintf("%s/models", strings.TrimRight(apiBase, "/"))
-	resp, err := http.Get(url)
+	client := newProviderHTTPClient(10 * time.Second)
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +68,7 @@ func QueryModelInfo(apiBase string) (*ModelInfo, error) {
 		} `json:"models"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, MaxResponseSize)).Decode(&payload); err != nil {
 		return nil, err
 	}
 

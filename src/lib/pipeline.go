@@ -41,7 +41,7 @@ func PlanFromSummaries(tmpl string, cfg Config, summariesJSON string) ([]CommitG
 		return nil, fmt.Errorf("plan returned empty groups")
 	}
 
-	return groups, nil
+	return NormalizeCommitGroups(groups), nil
 }
 
 func FallbackPlan(summariesJSON string) []CommitGroup {

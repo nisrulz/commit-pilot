@@ -22,7 +22,7 @@ func runListModels(cfg Config) {
 		PrintJSON(map[string]any{"models": models})
 	} else {
 		for _, model := range models {
-			fmt.Println(model)
+			fmt.Println(sanitizeLine(model, 1024))
 		}
 	}
 }
@@ -63,10 +63,10 @@ func RunDoctor(cfg Config) bool {
 	if cfg.APIKey != "" {
 		keyStatus = "set"
 	}
-	fmt.Printf("  %s Model: %s\n", green("✔"), cfg.Model)
-	fmt.Printf("    API base: %s\n", cfg.APIBase)
+	fmt.Printf("  %s Model: %s\n", green("✔"), sanitizeLine(cfg.Model, 1024))
+	fmt.Printf("    API base: %s\n", sanitizeLine(cfg.APIBase, 2048))
 	fmt.Printf("    API key: %s\n", keyStatus)
-	fmt.Printf("    Config: %s/config.env\n", ConfigDir())
+	fmt.Printf("    Config: %s/config.env\n", sanitizePath(ConfigDir()))
 
 	found, err := CheckProvider(cfg)
 	if err != nil {
@@ -74,7 +74,7 @@ func RunDoctor(cfg Config) bool {
 		return false
 	}
 	if !found {
-		fmt.Printf("  %s Model %q is not available from the provider\n", red("!"), cfg.Model)
+		fmt.Printf("  %s Model %q is not available from the provider\n", red("!"), sanitizeLine(cfg.Model, 1024))
 		return false
 	}
 	fmt.Printf("  %s Provider is reachable\n", green("✔"))
@@ -95,6 +95,9 @@ func CheckProvider(cfg Config) (bool, error) {
 }
 
 func ListProviderModels(cfg Config) ([]string, error) {
+	if err := ValidateProviderURL(cfg.APIBase); err != nil {
+		return nil, err
+	}
 	url := strings.TrimRight(cfg.APIBase, "/") + "/models"
 	ctx := cfg.Context
 	if ctx == nil {
@@ -110,7 +113,7 @@ func ListProviderModels(cfg Config) ([]string, error) {
 
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
+		client = newProviderHTTPClient(10 * time.Second)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

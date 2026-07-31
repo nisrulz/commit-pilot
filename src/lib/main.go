@@ -16,6 +16,10 @@ func Main() {
 		printHelp()
 		return
 	}
+	SetOutputMode(flags.Quiet, flags.JSON)
+	if flags.Error != "" {
+		Die("arguments: %s", flags.Error)
+	}
 
 	cfg := ResolveConfig(flags)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

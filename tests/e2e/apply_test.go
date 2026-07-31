@@ -16,16 +16,31 @@ func TestEndToEndPlanOutAndApply(t *testing.T) {
 
 	planPath := filepath.Join(t.TempDir(), "plan.json")
 	mock := newMockOpenAI(t, mockRespond)
-	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--plan-out", planPath, "--dry-run", "--json")
+	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--plan-out", planPath, "--json")
 	if err != nil {
 		t.Fatalf("plan-out run failed: %v\n%s", err, stderr)
 	}
 	if _, err := os.Stat(planPath); err != nil {
 		t.Fatalf("plan file not written: %v", err)
 	}
+	if count := commitCount(t, repo); count != 1 {
+		t.Fatalf("--plan-out should not commit, count=%d", count)
+	}
+
+	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--apply", planPath, "--dry-run", "--json", "--yes")
+	if err != nil {
+		t.Fatalf("dry-run apply failed: %v\n%s", err, stderr)
+	}
+	var dryRunResult map[string]any
+	if err := json.Unmarshal([]byte(stdout), &dryRunResult); err != nil {
+		t.Fatalf("invalid dry-run JSON: %v", err)
+	}
+	if dryRunResult["status"] != "dry_run" || commitCount(t, repo) != 1 {
+		t.Fatalf("dry-run apply changed the repository: %s", stdout)
+	}
 
 	// Apply the saved plan.
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--apply", planPath, "--json")
+	stdout, stderr, err = runCLI(t, bin, repo, mockEnv(mock), "y\n", "--apply", planPath, "--json")
 	if err != nil {
 		t.Fatalf("apply run failed: %v\n%s", err, stderr)
 	}
@@ -38,6 +53,36 @@ func TestEndToEndPlanOutAndApply(t *testing.T) {
 	}
 	if got := lastCommitFiles(t, repo); len(got) != 2 {
 		t.Fatalf("expected 2 files committed via apply, got %v", got)
+	}
+}
+
+func TestEndToEndSingleModeWritesPlan(t *testing.T) {
+	bin := cliBinary(t)
+	repo := newGitRepo(t)
+	writeFile(t, repo, "main.go", "package main\n")
+	runGit(t, repo, "add", "main.go")
+
+	planPath := filepath.Join(t.TempDir(), "plan.json")
+	mock := newMockOpenAI(t, mockRespond)
+	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--single", "--plan-out", planPath, "--json")
+	if err != nil {
+		t.Fatalf("single plan-out run failed: %v\n%s", err, stderr)
+	}
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		t.Fatalf("plan file not written: %v", err)
+	}
+	var groups []struct {
+		Files []string `json:"files"`
+	}
+	if err := json.Unmarshal(data, &groups); err != nil {
+		t.Fatalf("invalid plan JSON: %v", err)
+	}
+	if len(groups) != 1 || len(groups[0].Files) != 1 || groups[0].Files[0] != "main.go" {
+		t.Fatalf("unexpected plan: %s", data)
+	}
+	if count := commitCount(t, repo); count != 1 {
+		t.Fatalf("--plan-out should not commit, count=%d", count)
 	}
 }
 
@@ -68,6 +113,34 @@ func TestEndToEndApplyBinaryOnlyPlan(t *testing.T) {
 	}
 	if mock.calls() != 0 {
 		t.Fatalf("apply must not call the model, got %d calls", mock.calls())
+	}
+	if got := lastCommitFiles(t, repo); len(got) != 1 || got[0] != "logo.bin" {
+		t.Fatalf("expected logo.bin committed, got %v", got)
+	}
+}
+
+func TestEndToEndCommitsBinaryOnlyChangesWithoutModel(t *testing.T) {
+	bin := cliBinary(t)
+	repo := newGitRepo(t)
+	binary := []byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10}
+	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), binary, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mock := newMockOpenAI(t, mockRespond)
+	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--yes")
+	if err != nil {
+		t.Fatalf("binary-only run failed: %v\n%s", err, stderr)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+	if result["status"] != "completed" {
+		t.Fatalf("status = %v, want completed", result["status"])
+	}
+	if mock.calls() != 0 {
+		t.Fatalf("binary-only run must not call the model, got %d calls", mock.calls())
 	}
 	if got := lastCommitFiles(t, repo); len(got) != 1 || got[0] != "logo.bin" {
 		t.Fatalf("expected logo.bin committed, got %v", got)

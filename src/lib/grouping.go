@@ -6,7 +6,7 @@ import (
 )
 
 func AssignBinaryFiles(groups []CommitGroup, binaryFiles []string) []CommitGroup {
-	if len(binaryFiles) == 0 || len(groups) == 0 {
+	if len(binaryFiles) == 0 {
 		return groups
 	}
 	files := append([]string(nil), binaryFiles...)

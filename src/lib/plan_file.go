@@ -27,11 +27,11 @@ func ReadPlan(path string) ([]CommitGroup, error) {
 	if err := json.Unmarshal(data, &groups); err != nil || len(groups) == 0 {
 		var single CommitGroup
 		if err2 := json.Unmarshal(data, &single); err2 == nil && single.Subject != "" {
-			return []CommitGroup{single}, nil
+			return NormalizeCommitGroups([]CommitGroup{single}), nil
 		}
 		return nil, fmt.Errorf("plan must be a JSON array of commit groups")
 	}
-	return groups, nil
+	return NormalizeCommitGroups(groups), nil
 }
 
 func ValidatePlan(groups []CommitGroup, validFiles []string) error {

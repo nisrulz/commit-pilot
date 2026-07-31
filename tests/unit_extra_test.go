@@ -232,8 +232,8 @@ func TestShouldIncludePath(t *testing.T) {
 	if !lib.ShouldIncludePath(".env", nil, nil, true) {
 		t.Error("--include-sensitive should allow .env")
 	}
-	if lib.ShouldIncludePath("package-lock.json", nil, nil, false) {
-		t.Error("lock files should be excluded by default")
+	if !lib.ShouldIncludePath("package-lock.json", nil, nil, false) {
+		t.Error("lock files should be included by default")
 	}
 	if !lib.ShouldIncludePath("src/main.go", nil, nil, false) {
 		t.Error("ordinary source path should be included")
@@ -266,7 +266,7 @@ func TestExecuteCommitTruncatesSubject(t *testing.T) {
 	runGit(t, dir, "add", "a.go")
 
 	subject := strings.Repeat("x", 150)
-	if ok := lib.ExecuteCommit([]string{"a.go"}, subject, "", false, 100); !ok {
+	if ok := lib.ExecuteCommit([]string{"a.go"}, subject, "", false, 100, lib.ScopeStaged); !ok {
 		t.Fatal("ExecuteCommit failed")
 	}
 	head := strings.TrimSpace(runGitOutput(t, dir, "log", "-1", "--format=%s"))
@@ -280,12 +280,30 @@ func TestExecuteCommitEmptySubjectFallback(t *testing.T) {
 	t.Chdir(dir)
 	writeFile(t, dir, "a.go", "package a\n")
 	runGit(t, dir, "add", "a.go")
-	if ok := lib.ExecuteCommit([]string{"a.go"}, "---\n", "body", false, 100); !ok {
+	if ok := lib.ExecuteCommit([]string{"a.go"}, "---\n", "body", false, 100, lib.ScopeStaged); !ok {
 		t.Fatal("ExecuteCommit failed")
 	}
 	head := strings.TrimSpace(runGitOutput(t, dir, "log", "-1", "--format=%s"))
 	if head != "chore: update" {
 		t.Fatalf("fallback subject = %q, want 'chore: update'", head)
+	}
+}
+
+func TestExecuteCommitReportsRejectedHookWithStdout(t *testing.T) {
+	dir := newGitRepo(t)
+	t.Chdir(dir)
+	writeFile(t, dir, "a.go", "package a\n")
+	runGit(t, dir, "add", "a.go")
+
+	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho rejected\nexit 1\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if lib.ExecuteCommit([]string{"a.go"}, "test: reject", "", false, 100, lib.ScopeStaged) {
+		t.Fatal("rejected commit was reported as successful")
+	}
+	if subject := strings.TrimSpace(runGitOutput(t, dir, "log", "-1", "--format=%s")); subject != "init" {
+		t.Fatalf("unexpected commit created: %q", subject)
 	}
 }
 

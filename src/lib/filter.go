@@ -7,25 +7,47 @@ import (
 )
 
 func FilterFiles(files []FileDiff, includes, excludes []string, allowSensitive bool) []FileDiff {
+	return filterFiles(files, includes, ignoredPatterns(excludes), allowSensitive)
+}
+
+func filterFiles(files []FileDiff, includes, ignored []string, allowSensitive bool) []FileDiff {
 	var out []FileDiff
 	for _, file := range files {
-		if ShouldIncludePath(file.Path, includes, excludes, allowSensitive) {
+		if shouldIncludePath(file.Path, includes, ignored, allowSensitive) {
 			out = append(out, file)
 		}
 	}
 	return out
 }
 
-func FilterChanges(changes *Changes, includes, excludes []string, allowSensitive bool) {
-	changes.FilesWithDiffs = FilterFiles(changes.FilesWithDiffs, includes, excludes, allowSensitive)
-	changes.BinaryFiles = FilterPaths(changes.BinaryFiles, includes, excludes, allowSensitive)
+func FilterChanges(changes *Changes, includes, excludes []string, allowSensitive bool) []string {
+	before := append([]string(nil), changes.AllFiles...)
+	ignored := ignoredPatterns(excludes)
+	changes.FilesWithDiffs = filterFiles(changes.FilesWithDiffs, includes, ignored, allowSensitive)
+	changes.BinaryFiles = filterPaths(changes.BinaryFiles, includes, ignored, allowSensitive)
 	changes.AllFiles = AllFilePaths(changes)
+
+	selected := make(map[string]bool, len(changes.AllFiles))
+	for _, path := range changes.AllFiles {
+		selected[path] = true
+	}
+	var filtered []string
+	for _, path := range before {
+		if !selected[path] {
+			filtered = append(filtered, path)
+		}
+	}
+	return filtered
 }
 
 func FilterPaths(paths, includes, excludes []string, allowSensitive bool) []string {
+	return filterPaths(paths, includes, ignoredPatterns(excludes), allowSensitive)
+}
+
+func filterPaths(paths, includes, ignored []string, allowSensitive bool) []string {
 	var out []string
 	for _, path := range paths {
-		if ShouldIncludePath(path, includes, excludes, allowSensitive) {
+		if shouldIncludePath(path, includes, ignored, allowSensitive) {
 			out = append(out, path)
 		}
 	}
@@ -33,10 +55,18 @@ func FilterPaths(paths, includes, excludes []string, allowSensitive bool) []stri
 }
 
 func ShouldIncludePath(path string, includes, excludes []string, allowSensitive bool) bool {
-	ignored := append([]string{}, excludes...)
-	ignored = append(ignored, IgnorePatterns()...)
+	return shouldIncludePath(path, includes, ignoredPatterns(excludes), allowSensitive)
+}
+
+func shouldIncludePath(path string, includes, ignored []string, allowSensitive bool) bool {
 	return !matches(path, ignored) && (allowSensitive || !IsSensitivePath(path)) &&
 		(len(includes) == 0 || matches(path, includes))
+}
+
+func ignoredPatterns(excludes []string) []string {
+	ignored := append([]string{}, excludes...)
+	ignored = append(ignored, IgnorePatterns()...)
+	return ignored
 }
 
 func IgnorePatterns() []string {
@@ -79,9 +109,9 @@ func IsSensitivePath(path string) bool {
 		return true
 	}
 	switch name {
-	case "cargo.lock", "composer.lock", "gemfile.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock":
+	case ".netrc", ".npmrc", ".pypirc", "auth.json":
 		return true
 	default:
-		return strings.HasSuffix(name, ".lock")
+		return strings.HasSuffix(name, ".jks") || strings.HasSuffix(name, ".keystore")
 	}
 }

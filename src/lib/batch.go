@@ -14,58 +14,41 @@ func SplitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 		return nil
 	}
 
-	if CanFitInContext(template, files, contextWindow) {
+	diffBudget := AvailableDiffTokens(template, contextWindow)
+	if diffBudget <= 0 {
+		fmt.Fprintf(os.Stderr, "  %s Context window too small for any diff content\n", yellow("!"))
 		return [][]FileDiff{files}
 	}
 
-	// Binary-search the largest batch size that still fits the context window.
-	low, high := 1, len(files)
-	bestSize := 1
-
-	for low <= high {
-		mid := (low + high) / 2
-		if CanFitInContext(template, files[:mid], contextWindow) {
-			bestSize = mid
-			low = mid + 1
-		} else {
-			high = mid - 1
-		}
-	}
-
-	if !CanFitInContext(template, files[:1], contextWindow) {
-		diffBudget := AvailableDiffTokens(template, contextWindow)
-		if diffBudget <= 0 {
-			fmt.Fprintf(os.Stderr, "  %s Context window too small for any diff content\n", yellow("!"))
-			return [][]FileDiff{files}
-		}
-
-		var out [][]FileDiff
-		for _, f := range files {
-			chunks := SplitFileIntoChunks(f, diffBudget)
-			if len(chunks) > 1 {
-				for _, c := range chunks {
-					out = append(out, []FileDiff{c})
-				}
-			} else if len(chunks) == 1 {
-				out = append(out, chunks)
-			} else {
-				fmt.Fprintf(os.Stderr, "  %s File %s too large to chunk, sending truncated diff\n",
-					yellow("!"), f.Path)
-				truncated := TruncateDiff(f.Diff)
-				out = append(out, []FileDiff{{Path: f.Path, Diff: truncated}})
-			}
-		}
-		return out
-	}
-
 	var batches [][]FileDiff
-	for i := 0; i < len(files); i += bestSize {
-		end := i + bestSize
-		if end > len(files) {
-			end = len(files)
+	var current []FileDiff
+	flush := func() {
+		if len(current) > 0 {
+			batches = append(batches, current)
+			current = nil
 		}
-		batches = append(batches, files[i:end])
 	}
+
+	for _, file := range files {
+		if !CanFitInContext(template, []FileDiff{file}, contextWindow) {
+			flush()
+			chunks := SplitFileIntoChunks(file, diffBudget)
+			if len(chunks) == 0 {
+				chunks = []FileDiff{{Path: file.Path, Diff: TruncateDiff(file.Diff)}}
+			}
+			for _, chunk := range chunks {
+				batches = append(batches, []FileDiff{chunk})
+			}
+			continue
+		}
+
+		candidate := append(append([]FileDiff(nil), current...), file)
+		if len(current) > 0 && !CanFitInContext(template, candidate, contextWindow) {
+			flush()
+		}
+		current = append(current, file)
+	}
+	flush()
 	return batches
 }
 
@@ -97,6 +80,15 @@ func SplitFileIntoChunks(fd FileDiff, diffBudget int) []FileDiff {
 
 	for _, line := range lines {
 		lt := EstimateTokens(line) + 1
+		if lt > perChunkBudget {
+			flush()
+			for _, part := range splitByTokenBudget(line, perChunkBudget-1) {
+				cur = []string{part}
+				tok = EstimateTokens(part) + 1
+				flush()
+			}
+			continue
+		}
 		if tok+lt > perChunkBudget && len(cur) > 0 {
 			flush()
 		}
@@ -105,6 +97,29 @@ func SplitFileIntoChunks(fd FileDiff, diffBudget int) []FileDiff {
 	}
 	flush()
 	return chunks
+}
+
+func splitByTokenBudget(text string, budget int) []string {
+	if budget <= 0 {
+		return nil
+	}
+	runes := []rune(text)
+	var parts []string
+	for start := 0; start < len(runes); {
+		low, high, best := 1, len(runes)-start, 1
+		for low <= high {
+			mid := (low + high) / 2
+			if EstimateTokens(string(runes[start:start+mid])) <= budget {
+				best = mid
+				low = mid + 1
+			} else {
+				high = mid - 1
+			}
+		}
+		parts = append(parts, string(runes[start:start+best]))
+		start += best
+	}
+	return parts
 }
 
 // TruncateKeepLines is the number of head/tail lines kept when truncating.

@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 )
+
+const MaxDescriptionLength = 10000
 
 // CommitGroup is a proposed commit: a subject line, an optional multi-line
 // description, and the list of file paths it covers.
@@ -115,14 +118,60 @@ func ParseCommitGroup(text string) (CommitGroup, error) {
 	var g CommitGroup
 	if err := json.Unmarshal(raw, &g); err == nil {
 		if g.Subject != "" {
-			return g, nil
+			return NormalizeCommitGroup(g), nil
 		}
 	}
 
 	var groups []CommitGroup
 	if err := json.Unmarshal(raw, &groups); err == nil && len(groups) > 0 {
-		return groups[0], nil
+		return NormalizeCommitGroup(groups[0]), nil
 	}
 
 	return CommitGroup{}, fmt.Errorf("parse commit group: expected JSON object with 'subject' field")
+}
+
+func NormalizeCommitGroup(group CommitGroup) CommitGroup {
+	group.Subject = strings.Join(strings.Fields(sanitizeText(group.Subject, MaxSubjectLength)), " ")
+	group.Description = strings.TrimSpace(sanitizeText(group.Description, MaxDescriptionLength))
+	return group
+}
+
+func NormalizeCommitGroups(groups []CommitGroup) []CommitGroup {
+	for i := range groups {
+		groups[i] = NormalizeCommitGroup(groups[i])
+	}
+	return groups
+}
+
+func sanitizeText(value string, maxRunes int) string {
+	value = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return -1
+		}
+		return r
+	}, value)
+	runes := []rune(value)
+	if maxRunes > 0 && len(runes) > maxRunes {
+		return string(runes[:maxRunes])
+	}
+	return value
+}
+
+func sanitizeLine(value string, maxRunes int) string {
+	return strings.Join(strings.Fields(sanitizeText(value, maxRunes)), " ")
+}
+
+func sanitizePath(path string) string {
+	return sanitizeLine(path, 1024)
+}
+
+func sanitizePaths(paths []string) []string {
+	clean := make([]string, len(paths))
+	for i, path := range paths {
+		clean[i] = sanitizePath(path)
+	}
+	return clean
 }

@@ -20,6 +20,7 @@ type Changes struct {
 	FilesWithDiffs []FileDiff
 	BinaryFiles    []string
 	Fingerprint    string
+	EffectiveScope ChangeScope
 }
 
 // AllFilePaths returns every path known to the changes: the diffed files
@@ -45,11 +46,11 @@ func GitRun(args ...string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			if len(out) > 0 {
-				return string(out), nil
-			}
 			msg := strings.TrimSpace(string(ee.Stderr))
-			return "", errors.New(msg)
+			if msg == "" {
+				return string(out), ee
+			}
+			return string(out), fmt.Errorf("%s: %w", msg, ee)
 		}
 		return "", fmt.Errorf("git is not installed or not working")
 	}
@@ -100,6 +101,13 @@ func GetGitChangesForScope(scope ChangeScope) (*Changes, error) {
 
 	staged := GitOutputPaths("diff", "--cached", "--name-only")
 	hasStaged := len(staged) > 0 && scope != ScopeUnstaged
+	effectiveScope := scope
+	if scope == ScopeAuto {
+		effectiveScope = ScopeUnstaged
+		if hasStaged {
+			effectiveScope = ScopeStaged
+		}
+	}
 
 	var files []string
 	if scope == ScopeStaged && len(staged) == 0 {
@@ -133,13 +141,17 @@ func GetGitChangesForScope(scope ChangeScope) (*Changes, error) {
 		} else {
 			raw, err = GitRun("diff", "--binary", "--", f)
 			if raw == "" && err == nil {
-				raw, err = GitRun("diff", "--no-index", "--binary", "/dev/null", f)
+				raw, err = GitRun("diff", "--no-index", "--binary", "--", "/dev/null", f)
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+					err = nil
+				}
 			}
 		}
 
 		if raw == "" {
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  ! warning: could not diff %s: %v\n", f, err)
+				fmt.Fprintf(os.Stderr, "  ! warning: could not diff %s: %v\n", sanitizePath(f), err)
 			}
 			continue
 		}
@@ -159,5 +171,31 @@ func GetGitChangesForScope(scope ChangeScope) (*Changes, error) {
 		FilesWithDiffs: withDiffs,
 		BinaryFiles:    binaryFiles,
 		Fingerprint:    hex.EncodeToString(hash.Sum(nil)),
+		EffectiveScope: effectiveScope,
 	}, nil
+}
+
+// ValidateChangeScope rejects files that contain both staged and unstaged
+// changes. Committing only one side safely requires hunk-level index handling.
+func ValidateChangeScope(changes *Changes) error {
+	var otherScope []string
+	switch changes.EffectiveScope {
+	case ScopeStaged:
+		otherScope = GitOutputPaths("diff", "--name-only")
+	case ScopeUnstaged:
+		otherScope = GitOutputPaths("diff", "--cached", "--name-only")
+	default:
+		return nil
+	}
+
+	other := make(map[string]bool, len(otherScope))
+	for _, file := range otherScope {
+		other[file] = true
+	}
+	for _, file := range AllFilePaths(changes) {
+		if other[file] {
+			return fmt.Errorf("%q has both staged and unstaged changes; commit or stash one side first", file)
+		}
+	}
+	return nil
 }

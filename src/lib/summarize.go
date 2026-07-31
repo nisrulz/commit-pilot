@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -37,31 +39,94 @@ func SummariesPath() string {
 }
 
 func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (string, error) {
-	var summaries []FileSummary
+	if cfg.ContextWindow <= 0 {
+		cfg.ContextWindow = defaultContextWindow
+	}
+	parent := cfg.Context
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	cfg.Context = ctx
 
-	for i, fd := range files {
-		PrintProcessing(fmt.Sprintf("Summarizing %s (%d/%d)...", fd.Path, i+1, len(files)))
+	type jobResult struct {
+		index   int
+		summary FileSummary
+		err     error
+	}
+	jobs := make(chan int, len(files))
+	results := make(chan jobResult, len(files))
+	for i := range files {
+		jobs <- i
+	}
+	close(jobs)
 
-		prompt := FormatPrompt(tmpl, []string{fd.Path}, fd.Diff)
-		result, err := CallLLM(prompt, cfg, DefaultMaxTokens)
-		if err != nil {
-			return "", fmt.Errorf("summarize %s: %w", fd.Path, err)
+	workers := min(4, len(files))
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				fd := files[i]
+				PrintProcessing(fmt.Sprintf("Summarizing %s (%d/%d)...", fd.Path, i+1, len(files)))
+				summary, err := summarizeFile(cfg, tmpl, fd)
+				results <- jobResult{index: i, summary: summary, err: err}
+				if err != nil {
+					cancel()
+				}
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	summaries := make([]FileSummary, len(files))
+	var firstErr error
+	for result := range results {
+		if result.err != nil && firstErr == nil {
+			firstErr = result.err
 		}
-
-		s := ParseSummary(result, fd.Path)
-		summaries = append(summaries, s)
-
-		data, _ := json.MarshalIndent(summaries, "", "  ")
-		if err := os.WriteFile(dst, data, 0600); err != nil {
-			fmt.Fprintf(os.Stderr, "  ! warning: could not write summaries: %v\n", err)
-		}
+		summaries[result.index] = result.summary
+	}
+	if firstErr != nil {
+		return "", firstErr
 	}
 
 	out, err := json.MarshalIndent(summaries, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal summaries: %w", err)
 	}
+	if err := os.WriteFile(dst, out, 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "  ! warning: could not write summaries: %v\n", err)
+	}
 	return string(out), nil
+}
+
+func summarizeFile(cfg Config, tmpl string, file FileDiff) (FileSummary, error) {
+	batches := SplitFilesIntoBatches(tmpl, []FileDiff{file}, cfg.ContextWindow)
+	merged := FileSummary{File: file.Path}
+	var summaries []string
+	for i, batch := range batches {
+		if len(batches) > 1 {
+			PrintProcessing(fmt.Sprintf("Chunk %d/%d of %s", i+1, len(batches), file.Path))
+		}
+		prompt := FormatPrompt(tmpl, []string{file.Path}, batch[0].Diff)
+		result, err := CallLLM(prompt, cfg, DefaultMaxTokens)
+		if err != nil {
+			return FileSummary{}, fmt.Errorf("summarize %s: %w", file.Path, err)
+		}
+		summary := ParseSummary(result, file.Path)
+		if summary.Summary != "" {
+			summaries = append(summaries, summary.Summary)
+		}
+		merged.Changes = append(merged.Changes, summary.Changes...)
+	}
+	merged.Summary = sanitizeText(strings.Join(summaries, "\n"), MaxSummaryLen)
+	return merged, nil
 }
 
 func ParseSummary(text, file string) FileSummary {
@@ -75,8 +140,10 @@ func ParseSummary(text, file string) FileSummary {
 		return FallbackSummary(text, file)
 	}
 
-	if s.File == "" {
-		s.File = file
+	s.File = file
+	s.Summary = sanitizeText(s.Summary, MaxSummaryLen)
+	for i := range s.Changes {
+		s.Changes[i] = sanitizeText(s.Changes[i], MaxSummaryLen)
 	}
 	return s
 }
@@ -87,21 +154,23 @@ const (
 )
 
 func FallbackSummary(text, file string) FileSummary {
-	dump := text
-	if len(dump) > MaxDumpLen {
-		dump = dump[:MaxDumpLen] + "..."
-	}
+	dump := truncateSanitizedText(text, MaxDumpLen)
 	// First line only in the error message, full text goes into the summary
-	first := dump
-	if idx := strings.IndexByte(first, '\n'); idx > 0 {
-		first = first[:min(idx, 200)]
+	first := strings.SplitN(dump, "\n", 2)[0]
+	if len([]rune(first)) > 200 {
+		first = string([]rune(first)[:200]) + "..."
 	}
-	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s\n", yellow("!"), file)
+	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s\n", yellow("!"), sanitizePath(file))
 	fmt.Fprintf(os.Stderr, "    response: %s\n", first)
 
-	summary := text
-	if len(summary) > MaxSummaryLen {
-		summary = summary[:MaxSummaryLen] + "..."
-	}
+	summary := truncateSanitizedText(text, MaxSummaryLen)
 	return FileSummary{File: file, Summary: summary}
+}
+
+func truncateSanitizedText(text string, maxRunes int) string {
+	clean := []rune(sanitizeText(text, 0))
+	if len(clean) <= maxRunes {
+		return string(clean)
+	}
+	return string(clean[:maxRunes]) + "..."
 }

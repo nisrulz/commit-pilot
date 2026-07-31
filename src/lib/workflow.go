@@ -20,7 +20,17 @@ func runWorkflow(cfg Config) {
 		reportNoChanges(cfg)
 		return
 	}
-	FilterChanges(changes, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
+	filtered := FilterChanges(changes, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
+	if len(filtered) > 0 && !IsQuietOutput() {
+		fmt.Printf("  %s Skipped: %s\n", yellow("~"), strings.Join(sanitizePaths(filtered), ", "))
+	}
+	if len(changes.AllFiles) == 0 {
+		reportNoChanges(cfg)
+		return
+	}
+	if err := ValidateChangeScope(changes); err != nil {
+		Die("unsafe change scope: %v", err)
+	}
 
 	switch {
 	case cfg.PlanLint != "":
@@ -28,9 +38,31 @@ func runWorkflow(cfg Config) {
 	case cfg.Apply != "":
 		runApply(cfg, changes)
 	case len(changes.FilesWithDiffs) == 0 && len(changes.BinaryFiles) > 0:
-		reportBinaryOnly(cfg)
+		runBinaryOnly(cfg, changes)
 	default:
 		runGenerate(cfg, changes, tmpl)
+	}
+}
+
+func runBinaryOnly(cfg Config, changes *Changes) {
+	groups := AssignBinaryFiles(nil, changes.BinaryFiles)
+	writePlanIfRequested(cfg.PlanOut, groups)
+	if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
+		if cfg.JSON {
+			PrintRunResult("cancelled")
+		}
+		return
+	}
+	group := groups[0]
+	if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
+		os.Exit(1)
+	}
+	if cfg.JSON {
+		status := "completed"
+		if cfg.DryRun {
+			status = "dry_run"
+		}
+		PrintRunResult(status)
 	}
 }
 
@@ -69,12 +101,16 @@ func runApply(cfg Config, changes *Changes) {
 		return
 	}
 	for _, group := range groups {
-		if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength) {
+		if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
 			os.Exit(1)
 		}
 	}
 	if cfg.JSON {
-		PrintRunResult("completed")
+		status := "completed"
+		if cfg.DryRun {
+			status = "dry_run"
+		}
+		PrintRunResult(status)
 	}
 }
 
@@ -82,9 +118,15 @@ func runApply(cfg Config, changes *Changes) {
 // warns about oversized diffs, dispatches to single or auto mode, then checks
 // for any changes left behind and cleans up temp files on success.
 func runGenerate(cfg Config, changes *Changes, tmpl string) {
+	PrintStep(fmt.Sprintf("Provider: %s at %s", cfg.Model, cfg.APIBase))
+	if cfg.AutoContextWindow {
+		if detected := DetectContextWindow(cfg.APIBase); detected > 0 {
+			cfg.ContextWindow = detected
+		}
+	}
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(changes.AllFiles), "changed file")))
 	if len(changes.BinaryFiles) > 0 && !IsQuietOutput() {
-		fmt.Printf("    (binary: %s)\n", strings.Join(changes.BinaryFiles, ", "))
+		fmt.Printf("    (binary: %s)\n", strings.Join(sanitizePaths(changes.BinaryFiles), ", "))
 	}
 
 	estimatedTokens := EstimatePromptTokens(tmpl, changes.FilesWithDiffs)
@@ -157,10 +199,12 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
 	if subject == "" {
 		subject = "chore: update"
 	}
-	if !ConfirmCommitPlan([]CommitGroup{{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}}, cfg, changes.Fingerprint) {
+	group := CommitGroup{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}
+	writePlanIfRequested(cfg.PlanOut, []CommitGroup{group})
+	if !ConfirmCommitPlan([]CommitGroup{group}, cfg, changes.Fingerprint) {
 		return false
 	}
-	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun, cfg.MaxSubjectLength) {
+	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
 		os.Exit(1)
 	}
 	return true
@@ -177,7 +221,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 
 	target := SummariesPath()
 	if !IsQuietOutput() {
-		fmt.Fprintf(os.Stderr, "  %s Summaries -> %s\n", yellow("~"), target)
+		fmt.Fprintf(os.Stderr, "  %s Summaries -> %s\n", yellow("~"), sanitizeText(target, 1024))
 	}
 
 	summarizeTmpl := LoadSection("summarize")
@@ -206,14 +250,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	if err := ValidatePlan(groups, allPaths); err != nil {
 		Die("invalid generated plan: %v", err)
 	}
-	if cfg.PlanOut != "" {
-		if err := WritePlan(cfg.PlanOut, groups); err != nil {
-			Die("write plan: %v", err)
-		}
-		if !IsQuietOutput() {
-			fmt.Printf("  %s Plan -> %s\n", yellow("~"), cfg.PlanOut)
-		}
-	}
+	writePlanIfRequested(cfg.PlanOut, groups)
 
 	if len(groups) == 0 {
 		return target, true
@@ -225,7 +262,7 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 	}
 	commitFailed := false
 	for _, g := range groups {
-		if !ExecuteCommit(g.Files, g.Subject, g.Description, cfg.DryRun, cfg.MaxSubjectLength) {
+		if !ExecuteCommit(g.Files, g.Subject, g.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
 			commitFailed = true
 		}
 	}
@@ -233,6 +270,18 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 		os.Exit(1)
 	}
 	return target, true
+}
+
+func writePlanIfRequested(path string, groups []CommitGroup) {
+	if path == "" {
+		return
+	}
+	if err := WritePlan(path, groups); err != nil {
+		Die("write plan: %v", err)
+	}
+	if !IsQuietOutput() {
+		fmt.Printf("  %s Plan -> %s\n", yellow("~"), sanitizePath(path))
+	}
 }
 
 // CheckAndCommitRemainingChanges verifies that no changes are left behind after

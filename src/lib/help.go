@@ -18,7 +18,7 @@ Usage:
   commit-pilot --quiet                   # hide progress output
   commit-pilot --staged                  # use staged changes only
   commit-pilot --unstaged                # ignore staged changes
-  commit-pilot --plan-out <path>         # save generated plan as JSON
+  commit-pilot --plan-out <path>         # save generated plan without committing
   commit-pilot --apply <path>            # apply an edited JSON plan
   commit-pilot --plan-lint <path>        # validate a saved JSON plan
   commit-pilot --include <glob>          # include matching files only
