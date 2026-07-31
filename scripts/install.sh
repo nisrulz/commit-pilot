@@ -4,6 +4,11 @@ set -eu
 REPO="nisrulz/commit-pilot"
 BIN="commit-pilot"
 
+# The release sources are overridable so the E2E test can run the script
+# against a local mock server (also useful for self-hosted mirrors).
+api_base="${COMMIT_PILOT_INSTALL_API_BASE:-https://api.github.com/repos/$REPO}"
+download_base="${COMMIT_PILOT_INSTALL_DOWNLOAD_BASE:-https://github.com/$REPO}"
+
 arch=$(uname -m)
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 
@@ -24,43 +29,57 @@ case "$os" in
     ;;
 esac
 
-tag=$(curl -sfL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+tag=$(curl -sfL "$api_base/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
 [ -z "$tag" ] && { echo "Could not fetch latest release"; exit 1; }
 
 # Strip leading 'v' from tag for asset names (GoReleaser default)
 version=${tag#v}
 
 archive="${BIN}_${version}_${os}_${arch}.tar.gz"
-url="https://github.com/$REPO/releases/download/$tag/$archive"
+url="$download_base/releases/download/$tag/$archive"
+
+# Do all work in a temp dir so the script never depends on (or pollutes) the cwd
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
 
 echo "Downloading $BIN $tag ($os/$arch)..."
-curl -sfL "$url" -o "$archive"
+curl -sfL "$url" -o "$tmpdir/$archive"
 
-checksums_url="https://github.com/$REPO/releases/download/$tag/checksums.txt"
+checksums_url="$download_base/releases/download/$tag/checksums.txt"
 expected=$(curl -sfL "$checksums_url" | grep " $archive$" | cut -d' ' -f1)
 if [ -n "$expected" ]; then
   if command -v sha256sum >/dev/null 2>&1; then
-    actual=$(sha256sum "$archive" | cut -d' ' -f1)
+    actual=$(sha256sum "$tmpdir/$archive" | cut -d' ' -f1)
   else
-    actual=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+    actual=$(shasum -a 256 "$tmpdir/$archive" | cut -d' ' -f1)
   fi
   if [ "$actual" != "$expected" ]; then
     echo "  ! Checksum mismatch — aborting"
-    rm -f "$archive"
     exit 1
   fi
   echo "  ✓ Checksum verified"
 fi
 
 # Extract (binary may be in a versioned subdirectory)
-tmpdir=$(mktemp -d)
-tar xzf "$archive" -C "$tmpdir"
-find "$tmpdir" -name "$BIN" -type f -exec mv {} . \;
-rm -rf "$tmpdir" "$archive"
+tar xzf "$tmpdir/$archive" -C "$tmpdir"
 
-dst="$HOME/go/bin/$BIN"
-mkdir -p "$HOME/go/bin"
-mv "$BIN" "$dst"
+dst_dir="$HOME/go/bin"
+dst="$dst_dir/$BIN"
+mkdir -p "$dst_dir"
+
+if [ -d "$dst" ]; then
+  echo "  ! $dst exists as a directory — please remove it and re-run"
+  exit 1
+fi
+
+bin_file=$(find "$tmpdir" -name "$BIN" -type f -print -quit)
+if [ -z "$bin_file" ]; then
+  echo "  ! Could not find $BIN in the release archive"
+  exit 1
+fi
+
+mv "$bin_file" "$dst"
+chmod +x "$dst"
 echo "  ✓ Installed $BIN to $dst"
 
 # Ensure go/bin is on PATH

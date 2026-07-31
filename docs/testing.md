@@ -11,6 +11,17 @@ against a mock OpenAI-compatible provider. Together they cover auto and single
 mode commits, plan-out/apply/plan-lint, dry-run, sensitive-file filtering, scope
 flags, `--list-models`, `--doctor`, and provider failures.
 
+The install script is covered by an end-to-end test too. It runs
+`scripts/install.sh` against a local mock release server, so the real `curl`,
+`tar`, and checksum tooling all get exercised. The test verifies that the binary
+is installed to `~/go/bin`, that the working directory is left untouched, that a
+stale binary is replaced, and that checksum mismatches and conflicting
+destinations abort the install.
+
+To point `install.sh` at a mirror, or at a mock server during testing, set
+`COMMIT_PILOT_INSTALL_API_BASE` and `COMMIT_PILOT_INSTALL_DOWNLOAD_BASE`. The
+defaults point at the official GitHub endpoints.
+
 ```bash
 make test
 ```
