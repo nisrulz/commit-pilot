@@ -20,25 +20,95 @@ Or build from source:
 
 ```bash
 make install
-# or
-go build -o commit-pilot ./src/
 ```
 
 Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
 
 ## Configuration
 
-All configuration is done via environment variables.
+You can supply configuration through environment variables or a local config file.
 
 | Setting | Env var | Default |
 |---|---|---|
 | Provider | `OPENAI_PROVIDER` | `lmstudio` |
 | Model | `OPENAI_MODEL` | `gemma-4-e2b-it-qat` |
 | API base | `OPENAI_BASE_URL` | `http://localhost:1234/v1` |
-| API key | `OPENAI_API_KEY` | — |
+| API key | `OPENAI_API_KEY` | unset |
 | Prompt text | `COMMIT_PILOT_PROMPT` | built-in |
-| Prompt file | `COMMIT_PILOT_PROMPT_FILE` | — |
+| Prompt file | `COMMIT_PILOT_PROMPT_FILE` | unset |
 | Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
+| Retries | `COMMIT_PILOT_RETRIES` | `2` |
+| Request timeout | `COMMIT_PILOT_TIMEOUT_SECONDS` | `180` |
+| Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
+| Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
+| Conventional commits | `COMMIT_PILOT_CONVENTIONAL_COMMITS` | `true` |
+| Ticket prefix | `COMMIT_PILOT_TICKET_PREFIX` | unset |
+| Imperative subject tone | `COMMIT_PILOT_IMPERATIVE_TONE` | `true` |
+| Subject limit | `COMMIT_PILOT_MAX_SUBJECT_LENGTH` | `100` |
+| Commit body style | `COMMIT_PILOT_BODY_STYLE` | model default |
+
+Temporary AI summaries and configuration use separate locations. `COMMIT_PILOT_TMP_DIR`
+controls the disposable summaries created in auto mode. `COMMIT_PILOT_CONFIG_DIR`
+contains reusable provider defaults.
+
+For reusable provider defaults, create `config.env` in `COMMIT_PILOT_CONFIG_DIR`:
+
+```dotenv
+OPENAI_PROVIDER=ollama
+OPENAI_MODEL=gemma4:e2b-it-qat
+OPENAI_BASE_URL=http://localhost:11434/v1
+```
+
+If the file does not exist, Commit Pilot creates it with the default LM Studio
+provider, model, and API base on its first run.
+
+Values set in the environment take precedence over this file. API keys stay
+environment-only.
+
+For repository-specific defaults, add `.commit-pilot/config.env`. Its values
+override the user config, while environment variables still take precedence.
+Commit Pilot never creates this project file.
+
+Message preferences work in either config file: `COMMIT_PILOT_CONVENTIONAL_COMMITS`, `COMMIT_PILOT_TICKET_PREFIX`, `COMMIT_PILOT_IMPERATIVE_TONE`, `COMMIT_PILOT_MAX_SUBJECT_LENGTH`, and `COMMIT_PILOT_BODY_STYLE`. Environment values override config values.
+
+For example:
+
+```dotenv
+COMMIT_PILOT_TICKET_PREFIX=PLAT-
+COMMIT_PILOT_MAX_SUBJECT_LENGTH=72
+COMMIT_PILOT_BODY_STYLE=short bullet list
+```
+
+## Review the commit plan
+
+Before committing anything, Commit Pilot prints the proposed subjects and files and asks for confirmation. Use `--yes` for non-interactive or fully autonomous runs:
+
+```bash
+commit-pilot --yes
+commit-pilot --single --yes
+```
+
+Use `--single` to create one commit for all changes.
+
+Use `--plan-out plan.json` to save a generated plan for review. Edit the JSON, then run `commit-pilot --apply plan.json` to validate it against the current changes and apply it.
+
+Run `commit-pilot --plan-lint plan.json` to validate an edited plan without applying it. It checks file coverage, duplicate files, and your configured subject format and length.
+
+## Control files sent to the model
+
+Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Commit Pilot skips files that look like secrets, keys, or certificates unless you pass `--include-sensitive`.
+
+Use `--no-commit` when you want to generate and review a plan without creating commits. It is an alias for `--dry-run`.
+
+## Check your setup
+
+Run `commit-pilot --doctor` to check the current Git repository, resolved provider
+settings, and provider connection. It never prints your API key.
+
+Run `commit-pilot --list-models` to see the models reported by the configured
+provider. Add `--json` for a machine-readable result. Regular JSON runs emit one
+result object with a status and the commit groups. Confirmation prompts stay on
+stderr. Use `--quiet` to hide nonessential progress output during a regular run.
 
 ## Handling large diffs
 
@@ -59,7 +129,7 @@ When using LM Studio, commit-pilot automatically determines the optimal context 
 - Queries the loaded model's `max_context_length` via LM Studio's REST API
 - Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
 
-No configuration needed. The tool adapts to your hardware.
+You don't need to configure anything. The tool adapts to your hardware.
 
 ### Manual override
 
@@ -94,7 +164,7 @@ See the provider-specific guides:
 
 - [LMStudio](docs/lmstudio.md) (default, gemma-4-e2b-it-qat)
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
-- [OpenAI](docs/openai.md) (gpt-4o-mini) — or any OpenAI-compatible API
+- [OpenAI](docs/openai.md) (gpt-4o-mini) or any OpenAI-compatible API
 - [Unsloth Studio](docs/unsloth.md) (unsloth/gemma-4-E4B-it-qat-GGUF)
 
 ## How it works
@@ -103,7 +173,7 @@ See [how-it-works.md](docs/how-it-works.md).
 
 ## Privacy
 
-**Zero telemetry.** Commit Pilot doesn't track, phone home, or collect data. All AI processing happens via the provider you configure — no callbacks, no analytics, no data leaves your machine.
+**Zero telemetry.** Commit Pilot never phones home. No callbacks, no analytics, and no data leaves your machine.
 
 ## Requirements
 
@@ -112,7 +182,7 @@ See [how-it-works.md](docs/how-it-works.md).
 
 ## Development
 
-See [dev.md](docs/dev.md) for build instructions, project structure, and scripts.
+See [dev.md](docs/dev.md) for build instructions, project structure, and scripts, and [testing.md](docs/testing.md) for the test suites.
 
 Run tests:
 

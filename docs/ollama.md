@@ -10,8 +10,10 @@ Or download from [ollama.com](https://ollama.com).
 
 ## Download model
 
+Downloads the default model:
+
 ```bash
-ollama pull gemma4:e2b-it-qat
+make setup-ollama
 ```
 
 ## Serve
@@ -24,6 +26,13 @@ ollama serve
 
 ```bash
 OPENAI_PROVIDER=ollama OPENAI_MODEL=gemma4:e2b-it-qat commit-pilot
+```
+
+Check the server and available models:
+
+```bash
+OPENAI_PROVIDER=ollama commit-pilot --doctor
+OPENAI_PROVIDER=ollama commit-pilot --list-models
 ```
 
 Custom API base:

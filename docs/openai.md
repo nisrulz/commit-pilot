@@ -12,3 +12,9 @@ OPENAI_PROVIDER=openai \
   OPENAI_MODEL=gpt-4o-mini \
   commit-pilot
 ```
+
+Verify the selected model before committing:
+
+```bash
+OPENAI_PROVIDER=openai OPENAI_API_KEY=sk-proj-... commit-pilot --doctor
+```

@@ -12,13 +12,6 @@ Build and install to `$GOPATH/bin`:
 make install
 ```
 
-Run directly after build:
-
-```bash
-make build && ./commit-pilot --dry-run
-make build && ./commit-pilot 1 --dry-run
-```
-
 ## Project structure
 
 ```
@@ -32,7 +25,8 @@ commit-pilot/
 │   ├── lmstudio.md       # LMStudio setup
 │   ├── ollama.md         # Ollama setup
 │   ├── openai.md         # OpenAI setup
-│   └── unsloth.md        # Unsloth Studio setup
+│   ├── unsloth.md        # Unsloth Studio setup
+│   └── testing.md        # Unit, e2e, and live test guide
 ├── img/
 │   ├── github_banner.webp
 │   └── logo.svg
@@ -44,21 +38,31 @@ commit-pilot/
 ├── src/
 │   ├── main.go           # CLI entry point (thin wrapper)
 │   └── lib/
-│       ├── main.go       # Orchestration, mode dispatch
-│       ├── config.go     # CLI parsing, config resolution
-│       ├── git.go        # Git operations
-│       ├── context.go    # Dynamic context window detection
-│       ├── llm.go        # LLM API client, JSON extraction
+│       ├── main.go       # Entry point: flag parsing, dispatch, signal handling
+│       ├── args.go       # Command-line flag parsing
+│       ├── config.go     # Config struct and env/config-file resolution
+│       ├── help.go       # Usage/help text
+│       ├── workflow.go   # Run flows: plan-lint, apply, generate, single/auto mode
+│       ├── git.go        # Git operations and change collection
+│       ├── filter.go     # Include/exclude and sensitive-path filtering
+│       ├── llm.go        # LLM API client with retries and cancellation
+│       ├── json.go       # JSON extraction from model responses
 │       ├── prompt.go     # Prompt loading and formatting
-│       ├── commit.go     # AI commit group parsing and execution
-│       ├── grouping.go   # File categorization, grouping, merging logic
-│       ├── tokens.go     # Token estimation, batch splitting
-│       ├── output.go     # Terminal output helpers (colors, formatting)
+│       ├── group.go      # Commit group domain: parsing, merging, AI grouping
+│       ├── commit.go     # Commit execution and plan confirmation
+│       ├── grouping.go   # Binary-file assignment to commit groups
+│       ├── plan_file.go  # Plan read/write/validate/lint
 │       ├── pipeline.go   # Summarization & planning pipeline
 │       ├── summarize.go  # Per-file diff summarization
+│       ├── tokens.go     # Token estimation and context-fit checks
+│       ├── batch.go      # Batch splitting and diff chunking
+│       ├── context.go    # Dynamic context window detection
+│       ├── doctor.go     # Doctor checks and model listing
+│       ├── output.go     # Terminal/JSON output helpers and fatal errors
 │       └── prompt.txt    # Default prompt templates (embedded)
 ├── tests/
-│   ├── *_test.go         # Unit tests (package lib_test)
+│   ├── *_test.go           # Unit tests (package lib_test)
+│   └── e2e/                # End-to-end CLI tests against a mock provider
 ├── .gitignore
 ├── .goreleaser.yaml
 ├── go.mod
@@ -76,65 +80,16 @@ commit-pilot/
 | `make build` | Build the binary |
 | `make install` | Build and copy to `~/go/bin` |
 | `make vet` | Run static analysis |
-| `make test` | Run unit tests (122 tests) |
+| `make test` | Run unit and end-to-end tests |
 | `make clean` | Remove the binary |
 | `make test-live` | Run live integration test (requires AI provider running) |
 | `make setup-lmstudio` | Download default model for LMStudio |
 | `make setup-ollama` | Download default model for Ollama |
 | `make uninstall` | Remove from `~/go/bin` |
 
-## Unit tests
+## Testing
 
-Tests live in `tests/` and use external test package `lib_test`:
-
-```bash
-make test
-# or
-go test -count=1 ./tests/ -coverpkg=./src/lib/
-```
-
-We measure coverage for the `src/lib` package. Integration tests cover infrastructure code (HTTP, git, system calls).
-
-## Live test
-
-The integration test runs commit-pilot against a real AI endpoint.
-
-The script checks that your AI provider is reachable before starting. If it is not, it prints setup instructions.
-
-**LMStudio (default):**
-```bash
-make test-live
-```
-
-**Ollama:**
-```bash
-OPENAI_BASE_URL=http://localhost:11434/v1 make test-live
-```
-
-**OpenAI (or any OpenAI-compatible endpoint):**
-```bash
-OPENAI_BASE_URL=https://api.openai.com/v1 \
-  OPENAI_API_KEY=sk-... \
-  make test-live
-```
-
-**Unsloth Studio:**
-```bash
-OPENAI_BASE_URL=http://localhost:8888/v1 \
-  OPENAI_API_KEY=sk-unsloth-... \
-  make test-live
-```
-
-It sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
-
-- Git repo detection (non-git dir says error)
-- No changes (empty repo says message)
-- File detection (counts multi-file changes)
-- AI pipeline (git scan reaches AI call)
-- Single commit mode (positional `1` arg)
-- Binary file detection (`.bin` file listed)
-
-The temp directory `.temp-test/` lives in the project root and gets cleaned up when the script finishes.
+See [testing.md](testing.md) for the unit, end-to-end, and live test suites and how to run them.
 
 ## Releasing
 

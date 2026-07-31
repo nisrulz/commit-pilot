@@ -33,11 +33,11 @@ vet:
 	@echo "  ✓ go vet passed"
 
 test:
-	@go test -count=1 ./tests/ -coverpkg=./src/lib/
+	@go test -count=1 ./tests/... -coverpkg=./src/lib/
 	@echo "  ✓ all tests passed"
 
 test-cover:
-	@go test -count=1 -coverprofile=/tmp/cov.out -coverpkg=./src/lib/ ./tests/
+	@go test -count=1 -coverprofile=/tmp/cov.out -coverpkg=./src/lib/ ./tests/...
 	@go tool cover -func=/tmp/cov.out | tail -1
 	@rm /tmp/cov.out
 

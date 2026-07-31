@@ -20,6 +20,13 @@ OPENAI_PROVIDER=unsloth \
   commit-pilot
 ```
 
+Check the server and available model names:
+
+```bash
+OPENAI_PROVIDER=unsloth OPENAI_API_KEY=sk-unsloth-... commit-pilot --doctor
+OPENAI_PROVIDER=unsloth OPENAI_API_KEY=sk-unsloth-... commit-pilot --list-models
+```
+
 The default model is `unsloth/gemma-4-E4B-it-qat-GGUF`. To use a different model name, set it explicitly:
 
 ```bash

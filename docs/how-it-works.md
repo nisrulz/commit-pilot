@@ -5,18 +5,39 @@
 3. **Batching** - splits large diffs into manageable batches
 4. **AI analysis** - sends diffs to the LLM you configured
 5. **Grouping** - the AI returns conventional commit messages with file groupings
-6. **Execution** - stages and commits each logical group
+6. **Review and execution** - shows the plan, waits for confirmation, then stages and commits each logical group
 
 ## Auto-chunk mode (default)
 
-The AI groups related file changes into logical commits. Change a bug fix and a refactor in different files? They become separate commits.
+The AI decides the logical commit groups. Commit Pilot preserves those groups for text files and validates that every selected file is covered.
 
 ## Temp files
 
-In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. These JSON files are used to plan logical commit groupings and can be safely deleted after a run:
+In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. It uses these files to plan the groupings, and you can safely delete them after a run. Set `COMMIT_PILOT_TMP_DIR` to store them elsewhere:
 
 ```bash
+COMMIT_PILOT_TMP_DIR=/path/to/commit-pilot-tmp commit-pilot
 rm -rf ~/.commit-pilot/tmp
+```
+
+Configuration lives separately in `~/.config/commit-pilot/`. Set
+`COMMIT_PILOT_CONFIG_DIR` to point elsewhere. Commit Pilot reads provider,
+model, and API-base defaults from `config.env` there, creates the file with the
+LM Studio defaults when missing, and gives environment variables precedence.
+This directory never holds temporary summaries.
+
+For a repository-specific setup, add `.commit-pilot/config.env`. Project values
+override user config, and environment variables override both. Commit Pilot does
+not create the project file.
+
+## Commit confirmation
+
+Before committing, Commit Pilot prints the proposed commit subjects and files, then
+asks for confirmation. Use `--yes` when running non-interactively or when you want
+to apply the plan without a prompt:
+
+```bash
+commit-pilot --yes
 ```
 
 Use `--cleanup` to remove the temp file automatically on success:
@@ -27,14 +48,14 @@ commit-pilot --cleanup
 
 ## Interrupt handling
 
-Press `Ctrl+C` at any point. Commit-pilot exits cleanly with a message and no changes get committed.
+Press `Ctrl+C` during a provider request to cancel the request and any retry wait.
 
 ## Single commit mode
 
-Pass `1` to put all changes into one commit:
+Pass `--single` to put all changes into one commit:
 
 ```bash
-commit-pilot 1
+commit-pilot --single
 ```
 
 ## Dry run
@@ -43,6 +64,8 @@ Preview without committing:
 
 ```bash
 commit-pilot --dry-run
+# equivalent
+commit-pilot --no-commit
 ```
 
 ## Cleanup
@@ -76,6 +99,11 @@ export COMMIT_PILOT_CONTEXT_WINDOW=131072  # 128k tokens
 ```
 
 ## Output
+
+Use `--quiet` to hide nonessential progress output. `--json` prints one result
+object for scripts and editor tooling. It includes the run status and generated
+commit groups. Interactive confirmation remains on stderr so stdout stays valid
+JSON.
 
 ```
   * feat(api): add user search endpoint

@@ -1,6 +1,11 @@
 package lib_test
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -118,7 +123,7 @@ func TestParseArgs(t *testing.T) {
 		t.Fatal("expected showHelp=true for -h")
 	}
 
-	flags, showHelp := lib.ParseArgs([]string{"1", "--dry-run"})
+	flags, showHelp := lib.ParseArgs([]string{"--single", "--dry-run"})
 	if showHelp {
 		t.Fatal("expected showHelp=false")
 	}
@@ -127,6 +132,21 @@ func TestParseArgs(t *testing.T) {
 	}
 	if !flags.DryRun {
 		t.Fatal("expected DryRun=true")
+	}
+
+	flags, _ = lib.ParseArgs([]string{"--no-commit"})
+	if !flags.DryRun {
+		t.Fatal("expected --no-commit to enable dry-run")
+	}
+
+	flags, showHelp = lib.ParseArgs([]string{"--single", "--yes"})
+	if showHelp || string(flags.Mode) != "1" || !flags.Yes {
+		t.Fatalf("expected --single and --yes to be parsed, got %+v", flags)
+	}
+
+	flags, showHelp = lib.ParseArgs([]string{"--doctor"})
+	if showHelp || !flags.Doctor {
+		t.Fatalf("expected --doctor to be parsed, got %+v", flags)
 	}
 }
 
@@ -227,12 +247,186 @@ func TestLoadPromptAndSections(t *testing.T) {
 }
 
 func TestSummariesPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv(lib.TmpDirEnv, tmpDir)
 	path := lib.SummariesPath()
-	if !strings.Contains(path, ".commit-pilot") {
-		t.Fatal("expected path to contain .commit-pilot")
+	if !strings.HasPrefix(path, tmpDir) {
+		t.Fatalf("expected path %q to be inside temporary directory %q", path, tmpDir)
 	}
 	if !strings.Contains(path, "git_diff_summaries") {
 		t.Fatal("expected path to contain git_diff_summaries")
+	}
+}
+
+func TestConfigDir(t *testing.T) {
+	t.Setenv(lib.ConfigDirEnv, "/tmp/commit-pilot")
+	if got := lib.ConfigDir(); got != "/tmp/commit-pilot" {
+		t.Fatalf("ConfigDir() = %q, want environment value", got)
+	}
+}
+
+func TestConfigDirDefault(t *testing.T) {
+	t.Setenv(lib.ConfigDirEnv, "")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("user home directory unavailable")
+	}
+	if got, want := lib.ConfigDir(), filepath.Join(home, ".config", "commit-pilot"); got != want {
+		t.Fatalf("ConfigDir() = %q, want %q", got, want)
+	}
+}
+
+func TestTmpDir(t *testing.T) {
+	t.Setenv(lib.TmpDirEnv, "/tmp/commit-pilot")
+	if got := lib.TmpDir(); got != "/tmp/commit-pilot" {
+		t.Fatalf("TmpDir() = %q, want environment value", got)
+	}
+}
+
+func TestTmpDirDefault(t *testing.T) {
+	t.Setenv(lib.TmpDirEnv, "")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("user home directory unavailable")
+	}
+	if got, want := lib.TmpDir(), filepath.Join(home, ".commit-pilot", "tmp"); got != want {
+		t.Fatalf("TmpDir() = %q, want %q", got, want)
+	}
+}
+
+func TestConfigDefaults(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	content := "# local defaults\nOPENAI_PROVIDER=ollama\nOPENAI_MODEL=qwen\nOPENAI_BASE_URL=http://localhost:11434/v1\nIGNORED=value\n"
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	defaults := lib.ConfigDefaults()
+	if defaults["OPENAI_PROVIDER"] != "ollama" || defaults["OPENAI_MODEL"] != "qwen" {
+		t.Fatalf("unexpected config defaults: %#v", defaults)
+	}
+	if _, ok := defaults["IGNORED"]; ok {
+		t.Fatal("unsupported configuration key should be ignored")
+	}
+}
+
+func TestConfigDefaultsRejectsInvalidPreferenceValues(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	content := "COMMIT_PILOT_CONVENTIONAL_COMMITS=perhaps\nCOMMIT_PILOT_MAX_SUBJECT_LENGTH=0\n"
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	defaults := lib.ConfigDefaults()
+	if len(defaults) != 0 {
+		t.Fatalf("invalid preferences should be ignored: %#v", defaults)
+	}
+}
+
+func TestConfigDefaultsCreatesFile(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+
+	defaults := lib.ConfigDefaults()
+	if defaults["OPENAI_PROVIDER"] != "lmstudio" {
+		t.Fatalf("expected LM Studio default, got %#v", defaults)
+	}
+	data, err := os.ReadFile(filepath.Join(configDir, "config.env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "OPENAI_MODEL=gemma-4-e2b-it-qat") {
+		t.Fatalf("unexpected generated config: %s", data)
+	}
+}
+
+func TestProjectConfigOverridesUserConfig(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv(lib.ConfigDirEnv, configDir)
+	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte("OPENAI_MODEL=user-model\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := lib.GitRun("rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Skip("test requires Git repository")
+	}
+	projectDir := filepath.Join(strings.TrimSpace(root), ".commit-pilot")
+	projectConfig := filepath.Join(projectDir, "config.env")
+	if err := os.MkdirAll(projectDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projectConfig, []byte("OPENAI_MODEL=project-model\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(projectConfig)
+		_ = os.Remove(projectDir)
+	})
+	if got := lib.ConfigDefaults()["OPENAI_MODEL"]; got != "project-model" {
+		t.Fatalf("project config should override user config, got %q", got)
+	}
+}
+
+func TestLintPlan(t *testing.T) {
+	groups := []lib.CommitGroup{{Subject: "feat: add plan lint", Files: []string{"a.go"}}}
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: true}); err != nil {
+		t.Fatalf("valid plan: %v", err)
+	}
+	groups[0].Subject = "add plan lint"
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: true}); err == nil {
+		t.Fatal("expected conventional subject error")
+	}
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: false, MaxSubjectLength: 10}); err == nil {
+		t.Fatal("expected configured subject length error")
+	}
+	if err := lib.LintPlan(groups, []string{"a.go"}, lib.Config{Conventional: false, MaxSubjectLength: 100}); err != nil {
+		t.Fatalf("non-conventional subject should be allowed: %v", err)
+	}
+}
+
+func TestValidatePlanRejectsUnknownGeneratedPath(t *testing.T) {
+	groups := []lib.CommitGroup{{Subject: "feat: generated plan", Files: []string{"known.go", "invented.go"}}}
+	if err := lib.ValidatePlan(groups, []string{"known.go"}); err == nil {
+		t.Fatal("expected unknown path to be rejected")
+	}
+}
+
+func TestApplyMessagePreferences(t *testing.T) {
+	got := lib.ApplyMessagePreferences("prompt", lib.Config{Conventional: false, TicketPrefix: "ABC-", Imperative: true, MaxSubjectLength: 55, BodyStyle: "bulleted"})
+	for _, want := range []string{"Do not require", "ABC-", "imperative", "55", "bulleted"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("preferences missing %q: %s", want, got)
+		}
+	}
+}
+
+func TestConfirmCommitPlanDeclinesInjectedInput(t *testing.T) {
+	changes, err := lib.GetGitChanges()
+	if err != nil || len(changes.AllFiles) == 0 {
+		t.Skip("test requires a changed Git worktree")
+	}
+	var output bytes.Buffer
+	cfg := lib.Config{Input: strings.NewReader("n\n"), Output: &output}
+	if lib.ConfirmCommitPlan([]lib.CommitGroup{{Subject: "test: plan", Files: []string{"x"}}}, cfg, changes.Fingerprint) {
+		t.Fatal("expected declined confirmation")
+	}
+	if !strings.Contains(output.String(), "No commits created") {
+		t.Fatalf("missing confirmation output: %s", output.String())
+	}
+}
+
+func TestListProviderModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"z"}],"models":[{"key":"a"}]}`))
+	}))
+	defer server.Close()
+	models, err := lib.ListProviderModels(lib.Config{APIBase: server.URL})
+	if err != nil || strings.Join(models, ",") != "a,z" {
+		t.Fatalf("models=%v err=%v", models, err)
 	}
 }
 
@@ -242,41 +436,6 @@ func TestWarnInsecureHTTP(t *testing.T) {
 	lib.WarnInsecureHTTP("http://127.0.0.1:8000/v1", "sk-test")
 	lib.WarnInsecureHTTP("http://example.com/v1", "sk-test")
 	lib.WarnInsecureHTTP("http://example.com/v1", "")
-}
-
-func TestFileCategoryEdgeCases(t *testing.T) {
-	got := lib.FileCategory("config.js")
-	if got != "config" {
-		t.Fatalf("expected 'config' for config.js, got '%s'", got)
-	}
-
-	got = lib.FileCategory("README")
-	if got != "docs" {
-		t.Fatalf("expected 'docs' for README, got '%s'", got)
-	}
-
-	got = lib.FileCategory(".gitignore")
-	if got != "config" {
-		t.Fatalf("expected 'config' for .gitignore, got '%s'", got)
-	}
-
-	got = lib.FileCategory("run.sh")
-	if got != "scripts" {
-		t.Fatalf("expected 'scripts' for run.sh, got '%s'", got)
-	}
-
-	got = lib.FileCategory("main.go")
-	if got != "code" {
-		t.Fatalf("expected 'code' for main.go, got '%s'", got)
-	}
-}
-
-func TestLimitCommitScopeEdgeCases(t *testing.T) {
-	files := []string{"a.go", "b.go", "c.go", "d.go", "e.go"}
-	result := lib.LimitCommitScope(files)
-	if len(result) > 3 {
-		t.Fatalf("expected at most 3 files, got %d", len(result))
-	}
 }
 
 func TestAssignBinaryFilesEdgeCases(t *testing.T) {
@@ -291,34 +450,6 @@ func TestAssignBinaryFilesEdgeCases(t *testing.T) {
 	result = lib.AssignBinaryFiles(nil, []string{"a.bin"})
 	if result != nil {
 		t.Fatalf("expected nil for nil groups, got %v", result)
-	}
-}
-
-func TestMergeGroupsEdgeCases(t *testing.T) {
-	groups := []lib.CommitGroup{
-		{Subject: "feat: add login", Files: []string{"login.go"}},
-		{Subject: "feat: add login", Files: []string{"session.go"}},
-	}
-	result := lib.MergeGroups(groups)
-	if len(result) != 1 {
-		t.Fatalf("expected 1 merged group, got %d", len(result))
-	}
-}
-
-func TestSubjectsRelatedEdgeCases(t *testing.T) {
-	if lib.SubjectsRelated("feat: a", "") {
-		t.Fatal("expected false for empty second subject")
-	}
-	if lib.SubjectsRelated("", "feat: a") {
-		t.Fatal("expected false for empty first subject")
-	}
-}
-
-func TestFilterValidFilesEdgeCases(t *testing.T) {
-	valid := []string{"a.go", "b.go"}
-	result := lib.FilterValidFiles(nil, valid)
-	if len(result) != 0 {
-		t.Fatalf("expected empty for nil candidates, got %d", len(result))
 	}
 }
 
@@ -359,9 +490,43 @@ func TestIsBinaryDiffKnownPatterns(t *testing.T) {
 	if lib.IsBinaryDiff("text content\nnothing binary") {
 		t.Fatal("expected false for plain text")
 	}
+	if !lib.IsBinaryDiff("GIT binary patch\nliteral 12") {
+		t.Fatal("expected true for Git binary patch")
+	}
 }
 
+func TestFilterChangesFiltersAllPlanFiles(t *testing.T) {
+	changes := &lib.Changes{
+		AllFiles:       []string{"main.go", "private.pem", "package-lock.json"},
+		FilesWithDiffs: []lib.FileDiff{{Path: "main.go"}, {Path: "package-lock.json"}},
+		BinaryFiles:    []string{"private.pem"},
+	}
+	lib.FilterChanges(changes, nil, nil, false)
+	if got := lib.AllFilePaths(changes); len(got) != 1 || got[0] != "main.go" {
+		t.Fatalf("unexpected selected files: %v", got)
+	}
+}
 
+func TestFilterFilesHonorsIncludeAndExclude(t *testing.T) {
+	files := []lib.FileDiff{{Path: "cmd/main.go"}, {Path: "docs/readme.md"}}
+	got := lib.FilterFiles(files, []string{"cmd/*"}, []string{"*main.go"}, true)
+	if len(got) != 0 {
+		t.Fatalf("exclude should win, got: %v", got)
+	}
+}
+
+func TestIsSensitivePathAvoidsOrdinaryNames(t *testing.T) {
+	for _, path := range []string{"src/monkey.go", "src/keyboard.go", "src/clock.go"} {
+		if lib.IsSensitivePath(path) {
+			t.Fatalf("ordinary path marked sensitive: %s", path)
+		}
+	}
+	for _, path := range []string{".env.local", "keys/id_rsa", "config/api_key.txt", "package-lock.json", "Cargo.lock"} {
+		if !lib.IsSensitivePath(path) {
+			t.Fatalf("sensitive path not detected: %s", path)
+		}
+	}
+}
 
 func TestContextLengthErrorFields(t *testing.T) {
 	err := &lib.ContextLengthError{

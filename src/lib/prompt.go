@@ -60,6 +60,28 @@ func FormatPrompt(tmpl string, fileList []string, diff string) string {
 	return r.Replace(tmpl)
 }
 
+func ApplyMessagePreferences(tmpl string, cfg Config) string {
+	var rules []string
+	if cfg.Conventional {
+		rules = append(rules, "Use conventional commit format.")
+	} else {
+		rules = append(rules, "Do not require a conventional-commit prefix.")
+	}
+	if cfg.TicketPrefix != "" {
+		rules = append(rules, "Start the subject with ticket prefix "+cfg.TicketPrefix+".")
+	}
+	if cfg.Imperative {
+		rules = append(rules, "Use imperative tone in the subject.")
+	}
+	if cfg.MaxSubjectLength > 0 {
+		rules = append(rules, fmt.Sprintf("Keep the subject at most %d characters.", cfg.MaxSubjectLength))
+	}
+	if cfg.BodyStyle != "" {
+		rules = append(rules, "Use "+cfg.BodyStyle+" body style.")
+	}
+	return tmpl + "\n\nMessage preferences:\n- " + strings.Join(rules, "\n- ")
+}
+
 func SanitizeDiff(diff string) string {
 	return strings.Map(func(r rune) rune {
 		if r == 0 || (r < 0x20 && r != '\n' && r != '\t') {

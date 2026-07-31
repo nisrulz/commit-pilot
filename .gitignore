@@ -1,4 +1,5 @@
 commit-pilot
 .DS_Store
 .temp-test/
+.trash/
 *.out
