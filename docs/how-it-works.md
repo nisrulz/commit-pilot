@@ -13,18 +13,18 @@ The AI decides the logical commit groups. Commit Pilot preserves those groups fo
 
 ## Temp files
 
-In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. These JSON files are used to plan logical commit groupings and can be safely deleted after a run. Set `COMMIT_PILOT_TMP_DIR` to store them elsewhere:
+In auto mode, commit-pilot writes per-file summaries to `~/.commit-pilot/tmp/` as it processes each file. It uses these files to plan the groupings, and you can safely delete them after a run. Set `COMMIT_PILOT_TMP_DIR` to store them elsewhere:
 
 ```bash
 COMMIT_PILOT_TMP_DIR=/path/to/commit-pilot-tmp commit-pilot
 rm -rf ~/.commit-pilot/tmp
 ```
 
-Configuration belongs separately in `~/.config/commit-pilot/`. Set
-`COMMIT_PILOT_CONFIG_DIR` to use another configuration directory. Commit Pilot
-loads provider, model, and API-base defaults from `config.env` in that directory;
-creates the file with the LM Studio defaults when absent, and gives environment
-variables precedence. This directory is not used for temporary summaries.
+Configuration lives separately in `~/.config/commit-pilot/`. Set
+`COMMIT_PILOT_CONFIG_DIR` to point elsewhere. Commit Pilot reads provider,
+model, and API-base defaults from `config.env` there, creates the file with the
+LM Studio defaults when missing, and gives environment variables precedence.
+This directory never holds temporary summaries.
 
 For a repository-specific setup, add `.commit-pilot/config.env`. Project values
 override user config, and environment variables override both. Commit Pilot does

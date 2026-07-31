@@ -17,7 +17,7 @@ lms server start
 
 ## Run commit-pilot
 
-Default provider, no env vars needed:
+This is the default provider, so you don't need any env vars:
 
 ```bash
 commit-pilot

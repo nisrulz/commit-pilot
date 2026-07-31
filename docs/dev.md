@@ -142,7 +142,7 @@ OPENAI_BASE_URL=http://localhost:8888/v1 \
   make test-live
 ```
 
-It sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
+The script sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
 
 - Git repo detection (non-git dir says error)
 - No changes (empty repo says message)
@@ -154,7 +154,7 @@ It sets up a temporary git repo with staged changes across docs, config, and cod
 Use `commit-pilot --doctor` to verify a local provider before running the live
 test. `commit-pilot --list-models` shows the model IDs the provider exposes.
 
-The temp directory `.temp-test/` lives in the project root and gets cleaned up when the script finishes.
+The script keeps the temporary directory `.temp-test/` in the project root and cleans it up when it finishes.
 
 ## Releasing
 

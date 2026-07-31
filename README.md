@@ -28,16 +28,16 @@ Requires [Go](https://go.dev/dl/) 1.21+ and GNU Make.
 
 ## Configuration
 
-Configuration can be supplied through environment variables or a local config file.
+You can supply configuration through environment variables or a local config file.
 
 | Setting | Env var | Default |
 |---|---|---|
 | Provider | `OPENAI_PROVIDER` | `lmstudio` |
 | Model | `OPENAI_MODEL` | `gemma-4-e2b-it-qat` |
 | API base | `OPENAI_BASE_URL` | `http://localhost:1234/v1` |
-| API key | `OPENAI_API_KEY` | — |
+| API key | `OPENAI_API_KEY` | unset |
 | Prompt text | `COMMIT_PILOT_PROMPT` | built-in |
-| Prompt file | `COMMIT_PILOT_PROMPT_FILE` | — |
+| Prompt file | `COMMIT_PILOT_PROMPT_FILE` | unset |
 | Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
 | Retries | `COMMIT_PILOT_RETRIES` | `2` |
 | Request timeout | `COMMIT_PILOT_TIMEOUT_SECONDS` | `180` |
@@ -83,8 +83,7 @@ COMMIT_PILOT_BODY_STYLE=short bullet list
 
 ## Review the commit plan
 
-Before writing commits, Commit Pilot uses the model's proposed groups without a local file-count cap, then shows the proposed subjects and files and asks
-for confirmation. Use `--yes` for non-interactive or fully autonomous runs:
+Before committing anything, Commit Pilot prints the proposed subjects and files and asks for confirmation. Use `--yes` for non-interactive or fully autonomous runs:
 
 ```bash
 commit-pilot --yes
@@ -99,7 +98,7 @@ Run `commit-pilot --plan-lint plan.json` to validate an edited plan without appl
 
 ## Control files sent to the model
 
-Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Files that look like secrets, keys, or certificates are skipped unless you pass `--include-sensitive`.
+Use `--include` and `--exclude` with glob patterns to limit the files sent to the model. Add one pattern per line to `.commitpilotignore` for project defaults. Commit Pilot skips files that look like secrets, keys, or certificates unless you pass `--include-sensitive`.
 
 Use `--no-commit` when you want to generate and review a plan without creating commits. It is an alias for `--dry-run`.
 
@@ -132,7 +131,7 @@ When using LM Studio, commit-pilot automatically determines the optimal context 
 - Queries the loaded model's `max_context_length` via LM Studio's REST API
 - Uses `lms load --estimate-only` to binary-search the largest context that fits your RAM
 
-No configuration needed. The tool adapts to your hardware.
+You don't need to configure anything. The tool adapts to your hardware.
 
 ### Manual override
 
@@ -167,7 +166,7 @@ See the provider-specific guides:
 
 - [LMStudio](docs/lmstudio.md) (default, gemma-4-e2b-it-qat)
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
-- [OpenAI](docs/openai.md) (gpt-4o-mini) — or any OpenAI-compatible API
+- [OpenAI](docs/openai.md) (gpt-4o-mini) or any OpenAI-compatible API
 - [Unsloth Studio](docs/unsloth.md) (unsloth/gemma-4-E4B-it-qat-GGUF)
 
 ## How it works
@@ -176,7 +175,7 @@ See [how-it-works.md](docs/how-it-works.md).
 
 ## Privacy
 
-**Zero telemetry.** Commit Pilot doesn't track, phone home, or collect data. All AI processing happens via the provider you configure — no callbacks, no analytics, no data leaves your machine.
+**Zero telemetry.** Commit Pilot never phones home. No callbacks, no analytics, and no data leaves your machine.
 
 ## Requirements
 
