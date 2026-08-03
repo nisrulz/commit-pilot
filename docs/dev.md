@@ -19,7 +19,9 @@ make install
 ```
 commit-pilot/
 ├── .github/workflows/
-│   └── release.yml       # Release automation
+│   ├── pages.yml         # GitHub Pages deployment
+│   ├── release.yml       # Release automation
+│   └── test.yml          # Test suite
 ├── docs/
 │   ├── dev.md            # Development guide
 │   ├── github-pages.md   # Website deployment
@@ -27,8 +29,9 @@ commit-pilot/
 │   ├── lmstudio.md       # LMStudio setup
 │   ├── ollama.md         # Ollama setup
 │   ├── openai.md         # OpenAI setup
+│   ├── testing.md        # Unit, e2e, and live test guide
 │   ├── unsloth.md        # Unsloth Studio setup
-│   └── testing.md        # Unit, e2e, and live test guide
+│   └── usage.md          # Usage reference
 ├── img/
 │   ├── github_banner.webp
 │   └── logo.svg
