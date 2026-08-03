@@ -450,7 +450,7 @@ func TestConfirmCommitPlanFlattensDisplayedPaths(t *testing.T) {
 	if !lib.ConfirmCommitPlan([]lib.CommitGroup{{Subject: "test: plan", Files: []string{"evil\npath\tname"}}}, cfg, "") {
 		t.Fatal("dry-run plan should be accepted")
 	}
-	if !strings.Contains(output.String(), "Files: evil path name") {
+	if !strings.Contains(output.String(), "evil path name") {
 		t.Fatalf("path was not flattened: %q", output.String())
 	}
 }

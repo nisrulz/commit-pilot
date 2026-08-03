@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/nisrulz/commit-pilot/internal/table"
 )
 
 // ExecuteCommit stages the given files and creates a commit with the provided
@@ -68,14 +70,24 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 		in = os.Stdin
 	}
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n", bold("Proposed commit plan:"))
+	rows := make([]table.Row, 0, len(groups))
+	descriptions := make([]string, 0, len(groups))
 	for i, group := range groups {
 		group = NormalizeCommitGroup(group)
-		fmt.Fprintf(out, "    %d. %s\n", i+1, bold(group.Subject))
+		rows = append(rows, table.Row{Cells: []string{group.Subject, strings.Join(sanitizePaths(group.Files), ", ")}})
 		if description := strings.TrimSpace(group.Description); description != "" {
-			fmt.Fprintf(out, "       %s\n", description)
+			descriptions = append(descriptions, fmt.Sprintf("%d. %s", i+1, description))
 		}
-		fmt.Fprintf(out, "       %s %s\n", cyan("Files:"), cyan(strings.Join(sanitizePaths(group.Files), ", ")))
+	}
+	table.Render(out, []string{"SUBJECT", "FILES"}, []table.Group{{Title: "Proposed commit plan", Rows: rows}})
+	if len(descriptions) > 0 {
+		fmt.Fprintln(out)
+		fmt.Fprintf(out, "  %s\n", cyan("Descriptions:"))
+		for _, d := range descriptions {
+			for _, line := range WrapText(d, WrapWidth) {
+				fmt.Fprintf(out, "    %s\n", line)
+			}
+		}
 	}
 
 	if cfg.DryRun {

@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/nisrulz/commit-pilot/internal/spinner"
-	"github.com/nisrulz/commit-pilot/scripts/tab"
+	"github.com/nisrulz/commit-pilot/internal/table"
 )
 
 // outcome is the result of a single live test.
@@ -118,25 +118,25 @@ func readResults(r io.Reader) ([]outcome, int, int) {
 func renderReport(w io.Writer, rows []outcome, pass, fail int) {
 	type group struct {
 		title string
-		rows  []tab.Row
+		rows  []table.Row
 	}
 	var groups []group
 	index := map[string]int{}
 	for _, row := range rows {
-		tr := tab.Row{Name: row.name, Status: row.status}
+		tr := table.Row{Cells: []string{row.name, row.status}}
 		if i, ok := index[row.category]; ok {
 			groups[i].rows = append(groups[i].rows, tr)
 			continue
 		}
 		index[row.category] = len(groups)
-		groups = append(groups, group{title: row.category, rows: []tab.Row{tr}})
+		groups = append(groups, group{title: row.category, rows: []table.Row{tr}})
 	}
 
-	tgs := make([]tab.Group, len(groups))
+	tgs := make([]table.Group, len(groups))
 	for i, g := range groups {
-		tgs[i] = tab.Group{Title: g.title, Rows: g.rows}
+		tgs[i] = table.Group{Title: table.TitleCase(g.title), Rows: g.rows}
 	}
-	tab.Render(w, tgs)
+	table.Render(w, []string{"TEST", "RESULT"}, tgs)
 
 	fmt.Fprintf(w, "\n  Passed: %d   Failed: %d   Total: %d\n", pass, fail, pass+fail)
 }

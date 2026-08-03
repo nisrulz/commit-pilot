@@ -66,12 +66,12 @@ func TestShortPackage(t *testing.T) {
 
 func TestHumanizeTestName(t *testing.T) {
 	cases := map[string]string{
-		"TestPlanFromSummariesSuccess":                                        "plan from summaries success",
-		"TestEndToEndPlanOutAndApply":                                         "end to end plan out and apply",
-		"TestCallLLMTruncation":                                               "call llm truncation",
-		"TestCLIJSONOutput":                                                   "CLI JSON output",
-		"TestEndToEndRejectsPartiallyStagedFile/--staged":                     "end to end rejects partially staged file / --staged",
-		"TestEndToEndInstallScript/installs_binary_without_touching_cwd":      "end to end install script / installs binary without touching cwd",
+		"TestPlanFromSummariesSuccess":                                   "plan from summaries success",
+		"TestEndToEndPlanOutAndApply":                                    "end to end plan out and apply",
+		"TestCallLLMTruncation":                                          "call llm truncation",
+		"TestCLIJSONOutput":                                              "CLI JSON output",
+		"TestEndToEndRejectsPartiallyStagedFile/--staged":                "end to end rejects partially staged file / --staged",
+		"TestEndToEndInstallScript/installs_binary_without_touching_cwd": "end to end install script / installs binary without touching cwd",
 	}
 	for in, want := range cases {
 		if got := humanizeTestName(in); got != want {
@@ -82,23 +82,23 @@ func TestHumanizeTestName(t *testing.T) {
 
 func TestCategoryForTest(t *testing.T) {
 	cases := map[string]string{
-		"TestExtractJSON_nested":                                   "json parsing",
-		"TestParseArgsValueFlags":                                  "cli & args",
-		"TestCLIJSONOutput":                                        "cli & args",
-		"TestConfigDefaults":                                       "config",
-		"TestEstimateTokens_basic":                                 "context window",
-		"TestParseSummary_validJSON":                               "summaries",
-		"TestSplitFileIntoChunks":                                  "batching & chunking",
-		"TestFilterFilesHonorsIncludeAndExclude":                   "filtering",
-		"TestGetGitChangesScopes":                                  "git changes",
-		"TestMergeCommitGroups_multiple":                           "commit groups",
-		"TestPlanFromSummariesSuccess":                             "planning",
-		"TestCallLLMTruncation":                                    "llm & providers",
-		"TestResponseFormatSchemaPerPrompt":                        "llm & providers",
-		"TestLoadPromptAndSections":                                "prompts",
-		"TestPrintJSON":                                            "output & formatting",
-		"TestSummarizeChangesChunksLargeFilesAndOwnsPath":          "summaries",
-		"TestUnknownThing":                                         "other",
+		"TestExtractJSON_nested":                          "json parsing",
+		"TestParseArgsValueFlags":                         "cli & args",
+		"TestCLIJSONOutput":                               "cli & args",
+		"TestConfigDefaults":                              "config",
+		"TestEstimateTokens_basic":                        "context window",
+		"TestParseSummary_validJSON":                      "summaries",
+		"TestSplitFileIntoChunks":                         "batching & chunking",
+		"TestFilterFilesHonorsIncludeAndExclude":          "filtering",
+		"TestGetGitChangesScopes":                         "git changes",
+		"TestMergeCommitGroups_multiple":                  "commit groups",
+		"TestPlanFromSummariesSuccess":                    "planning",
+		"TestCallLLMTruncation":                           "llm & providers",
+		"TestResponseFormatSchemaPerPrompt":               "llm & providers",
+		"TestLoadPromptAndSections":                       "prompts",
+		"TestPrintJSON":                                   "output & formatting",
+		"TestSummarizeChangesChunksLargeFilesAndOwnsPath": "summaries",
+		"TestUnknownThing":                                "other",
 	}
 	for in, want := range cases {
 		if got := categoryForTest(in); got != want {
