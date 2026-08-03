@@ -89,6 +89,14 @@ When changes exceed the model's context window (default 64k tokens), commit-pilo
 - Chunks oversized single files into line-aligned pieces where possible, including very long single lines
 - Merges chunk results into a single commit message
 
+The planning step applies the same budget discipline. The file summaries that
+drive grouping are compacted to fit the model's context window, so the JSON
+sent to the planner is always sized to what the model can process. Every prompt
+carries an explicit JSON schema (field names, types, and which fields are
+required). Built-in prompts request strict `json_schema` structured output so
+the model must conform to that shape, and the request degrades to `json_object`
+and then plain output when a provider does not support it.
+
 ### Dynamic context detection (LM Studio)
 
 When generating with LM Studio and no explicit `COMMIT_PILOT_CONTEXT_WINDOW`, the tool automatically:

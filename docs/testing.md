@@ -6,12 +6,20 @@ Focused unit tests live in `tests/` (external test package `lib_test`). They
 target individual functions in `src/lib`: plan validation, provider retries,
 cancellation, confirmation input, config precedence, Git scope behavior, and
 provider dispatch (including unknown-provider rejection and probe body draining).
+They also cover JSON resilience: repair of truncated model output, structured
+output negotiation (strict `json_schema` degrading to `json_object` and then a
+plain request), and the retry paths for responses that are cut off or contain
+no JSON.
 
 End-to-end tests live in `tests/e2e/`. They build the real CLI binary and run it
 against a mock OpenAI-compatible provider. Together they cover auto and single
 mode commits, plan-out/apply/plan-lint, dry-run, sensitive-file filtering, scope
 flags, partially staged files, option-like filenames, binary-only commits,
-`--list-models`, `--doctor`, and provider failures.
+`--list-models`, `--doctor`, and provider failures. A resilience suite drives
+the whole CLI through bad model output: a truncated plan that gets repaired, a
+prose-only plan that gets a strict re-prompt, a provider that rejects
+`json_object` and receives a plain retry, and a completion cut off at its token
+budget that gets a larger-budget retry.
 
 The install script is covered by an end-to-end test too. It runs
 `scripts/install.sh` against a local mock release server, so the real `curl`,

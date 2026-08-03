@@ -108,6 +108,31 @@ provider. Add `--json` for a machine-readable result. Regular JSON runs emit one
 result object with a status and the commit groups. Confirmation prompts stay on
 stderr. Use `--quiet` to hide nonessential progress output during a regular run.
 
+## Reliable model output
+
+Commit Pilot asks for JSON and, when your provider supports it, requests strict
+structured output through `response_format`. Built-in prompts send a strict
+`json_schema` that pins the exact response shape; custom prompts and providers
+without structured-output support fall back to `json_object` and then a plain
+request automatically, so nothing breaks on older servers. Every prompt also
+spells out the JSON schema it expects, so the model returns the right shape
+even without structured output.
+
+Input is sized to the model before it is sent. The summaries that drive plan
+grouping are compacted to fit the configured context window, reserving room for
+the template, the response, and a safety margin, so the JSON never exceeds what
+the model can process.
+
+On top of that, three safeguards keep malformed model responses from failing
+the run:
+
+- A response that hits the output budget is retried automatically with a
+  larger budget.
+- A response with no JSON at all is asked once more with a strict
+  only-JSON instruction.
+- JSON cut off mid-structure is repaired by closing the unfinished brackets
+  and dropping a dangling key before parsing.
+
 ## Custom prompt
 
 Override the default prompt with inline text or a file:
