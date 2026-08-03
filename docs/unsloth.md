@@ -12,6 +12,21 @@ unsloth run --model unsloth/gemma-4-E4B-it-qat-GGUF -p 8888
 
 Or open the Unsloth Studio UI, load a GGUF model via New Chat, and create an API key from **Settings → API**.
 
+## Enable automatic model loading
+
+Unsloth Studio keeps models unloaded until you start a chat. So the first API
+call fails with:
+
+```
+No model loaded. Call POST /inference/load first.
+```
+
+Now, that is an issue 🤔. The fix is quite simple though. Turn on **Model
+auto-switch** under **Settings → API**. Unsloth Studio then loads the requested
+model on the first API call, and commit-pilot just works.
+
+![Settings → API with Model auto-switch enabled](../img/unsloth-auto-load.png)
+
 ## Run commit-pilot
 
 ```bash
