@@ -66,7 +66,8 @@ commit-pilot/
 │       │   ├── openai.go     # OpenAI-compatible hosted endpoints
 │       │   ├── ollama.go     # Ollama local API
 │       │   ├── lmstudio.go   # LM Studio local API
-│       │   └── unsloth.go    # Unsloth Studio (health-probed, key-protected API)
+│       │   ├── unsloth.go    # Unsloth Studio (health-probed, key-protected API)
+│       │   └── custom.go     # Generic OpenAI-compatible endpoint (OPENAI_BASE_URL)
 │       └── prompt.txt    # Default prompt templates (embedded)
 ├── tests/
 │   ├── *_test.go           # Unit tests (package lib_test)

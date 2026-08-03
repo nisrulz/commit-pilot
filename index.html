@@ -283,7 +283,7 @@ a:hover { text-decoration: underline; }
       <div class="md-text">Use environment variables or a user config file:</div>
       <table>
         <tr><th>env var</th><th>description</th><th>default</th></tr>
-        <tr><td>OPENAI_PROVIDER</td><td>Provider: lmstudio, ollama, openai, unsloth</td><td>lmstudio</td></tr>
+        <tr><td>OPENAI_PROVIDER</td><td>Provider: lmstudio, ollama, openai, unsloth, custom</td><td>lmstudio</td></tr>
         <tr><td>OPENAI_MODEL</td><td>Model name</td><td>gemma-4-e2b-it-qat</td></tr>
         <tr><td>OPENAI_BASE_URL</td><td>API base URL</td><td>http://localhost:1234/v1</td></tr>
         <tr><td>OPENAI_API_KEY</td><td>API key</td><td>unset</td></tr>
@@ -312,7 +312,7 @@ a:hover { text-decoration: underline; }
       <div class="md-text">Environment variable &gt; config file &gt; built-in default</div>
       <table>
         <tr><th>setting</th><th>env var</th><th>default</th></tr>
-        <tr><td>provider</td><td>OPENAI_PROVIDER</td><td>lmstudio <span class="comment">(lmstudio, ollama, openai, unsloth)</span></td></tr>
+        <tr><td>provider</td><td>OPENAI_PROVIDER</td><td>lmstudio <span class="comment">(lmstudio, ollama, openai, unsloth, custom)</span></td></tr>
         <tr><td>model</td><td>OPENAI_MODEL</td><td>gemma-4-e2b-it-qat</td></tr>
         <tr><td>api base</td><td>OPENAI_BASE_URL</td><td>http://localhost:1234/v1</td></tr>
         <tr><td>api key</td><td>OPENAI_API_KEY</td><td>unset</td></tr>
@@ -342,12 +342,12 @@ a:hover { text-decoration: underline; }
     <div class="md-section">
       <div class="md-h2">How it works</div>
       <div class="md-list">
-        <div class="md-li"><span class="md-bold">Git scan</span> - collects staged or unstaged changes</div>
-        <div class="md-li"><span class="md-bold">Token estimation</span> - checks if diffs fit within the model context window</div>
-        <div class="md-li"><span class="md-bold">Batching</span> - splits large diffs into window-sized batches; oversized files are chunked across multiple LLM calls</div>
-        <div class="md-li"><span class="md-bold">Auto-mode</span> - summarizes up to four files at a time, then plans logical commit groupings</div>
-        <div class="md-li"><span class="md-bold">Single mode</span> - all changes go into one commit</div>
-        <div class="md-li"><span class="md-bold">Execution</span> - refuses partially staged files, then commits each logical group</div>
+        <div class="md-li"><span class="md-bold">Git scan</span>: collects staged or unstaged changes</div>
+        <div class="md-li"><span class="md-bold">Token estimation</span>: checks if diffs fit within the model context window</div>
+        <div class="md-li"><span class="md-bold">Batching</span>: splits large diffs into window-sized batches; oversized files are chunked across multiple LLM calls</div>
+        <div class="md-li"><span class="md-bold">Auto-mode</span>: summarizes up to four files at a time, then plans logical commit groupings</div>
+        <div class="md-li"><span class="md-bold">Single mode</span>: all changes go into one commit</div>
+        <div class="md-li"><span class="md-bold">Execution</span>: refuses partially staged files, then commits each logical group</div>
       </div>
       <div class="md-text">With LM Studio, the context window is <span class="md-bold">auto-detected</span> based on available RAM and model limits. You don't need to configure anything.</div>
       <div class="md-text">See <a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/how-it-works.md">how-it-works.md</a> for dry-run and commit output examples.</div>

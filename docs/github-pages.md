@@ -6,7 +6,7 @@ https://nisrulz.github.io/commit-pilot/
 
 ## Setup
 
-The site requires no build step - it is a single `index.html` in the repo root.
+The site needs no build step; it is a single `index.html` in the repo root.
 
 **To enable:**
 

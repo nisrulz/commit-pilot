@@ -4,7 +4,8 @@
 
 Focused unit tests live in `tests/` (external test package `lib_test`). They
 target individual functions in `src/lib`: plan validation, provider retries,
-cancellation, confirmation input, config precedence, and Git scope behavior.
+cancellation, confirmation input, config precedence, Git scope behavior, and
+provider dispatch (including unknown-provider rejection and probe body draining).
 
 End-to-end tests live in `tests/e2e/`. They build the real CLI binary and run it
 against a mock OpenAI-compatible provider. Together they cover auto and single
@@ -14,10 +15,10 @@ flags, partially staged files, option-like filenames, binary-only commits,
 
 The install script is covered by an end-to-end test too. It runs
 `scripts/install.sh` against a local mock release server, so the real `curl`,
-`tar`, and checksum tooling all get exercised. The test verifies that the binary
-is installed to `~/go/bin`, that the working directory is left untouched, that a
-stale binary is replaced, and that checksum mismatches and conflicting
-destinations abort the install. Missing checksum entries fail too.
+`tar`, and checksum tooling all get exercised. The test verifies the binary
+lands in `~/go/bin`, the working directory stays untouched, a stale binary gets
+replaced, and checksum mismatches or conflicting destinations abort the install.
+Missing checksum entries fail too.
 
 To point `install.sh` at a mirror, or at a mock server during testing, set
 `COMMIT_PILOT_INSTALL_API_BASE` and `COMMIT_PILOT_INSTALL_DOWNLOAD_BASE`. The

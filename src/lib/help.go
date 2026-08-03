@@ -27,7 +27,7 @@ Usage:
   commit-pilot --cleanup                 # remove temp files on success
 
 Environment variables:
-  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai, unsloth
+  OPENAI_PROVIDER              Provider: ollama, lmstudio, openai, unsloth, custom
   OPENAI_MODEL                 Model name (default: gemma-4-e2b-it-qat)
   OPENAI_BASE_URL              API base URL
   OPENAI_API_KEY               API key

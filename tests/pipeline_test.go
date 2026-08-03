@@ -1,8 +1,8 @@
 package lib_test
 
 import (
-	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"encoding/json"
+	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"strings"
 	"testing"
 )

@@ -123,13 +123,13 @@ stderr. Use `--quiet` to hide nonessential progress output during a regular run.
 
 Commit Pilot automatically handles changes that exceed the model's context window:
 
-1. **Estimates** token count and checks against the context window
-2. **Batches** files into groups that fit within the window
-3. **Splits oversized files** into line-aligned chunks processed across multiple LLM calls
-4. **Merges** chunk results into a single commit message
-5. **Shows progress**: `Processing batch 1/3 (2 files)...`
+1. Estimates the token count and checks it against the context window
+2. Batches files into groups that fit within the window
+3. Splits oversized files into line-aligned chunks across multiple LLM calls
+4. Merges chunk results into a single commit message
+5. Shows progress: `Processing batch 1/3 (2 files)...`
 
-When an oversized single file is detected, it shows per-chunk progress: `Chunk 2/5 of big.go`.
+When a single file is too large, you see per-chunk progress: `Chunk 2/5 of big.go`.
 
 Auto mode summarizes up to four files at a time and keeps their original order for planning. Binary-only changes use `chore: update binary assets` without calling the model.
 
@@ -177,6 +177,11 @@ See the provider-specific guides:
 - [Ollama](docs/ollama.md) (gemma4:e2b-it-qat)
 - [OpenAI](docs/openai.md) (gpt-4o-mini) or any OpenAI-compatible API
 - [Unsloth Studio](docs/unsloth.md) (unsloth/gemma-4-E4B-it-qat-GGUF)
+
+`OPENAI_PROVIDER` accepts `lmstudio`, `ollama`, `openai`, `unsloth`, and `custom`.
+Any other value aborts the run, so a typo cannot silently point commit-pilot at
+the wrong endpoint. Use `custom` for an OpenAI-compatible API that is not one of
+the named providers; it requires `OPENAI_BASE_URL`.
 
 ## How it works
 

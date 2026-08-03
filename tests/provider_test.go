@@ -2,6 +2,7 @@ package lib_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,11 +20,67 @@ func TestProviderDispatch(t *testing.T) {
 		"ollama":   "ollama",
 		"lmstudio": "lmstudio",
 		"unsloth":  "unsloth",
+		"custom":   "custom",
 	}
 	for name, want := range cases {
 		if got := provider.New(name).Name(); got != want {
 			t.Fatalf("New(%q).Name() = %q, want %q", name, got, want)
 		}
+	}
+}
+
+func TestProviderKnownAndNames(t *testing.T) {
+	for _, name := range []string{"openai", "ollama", "lmstudio", "unsloth", "custom"} {
+		if !provider.Known(name) {
+			t.Fatalf("Known(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"", "openai-", "unslth", "lmstudio1"} {
+		if provider.Known(name) {
+			t.Fatalf("Known(%q) = true, want false", name)
+		}
+	}
+	names := provider.Names()
+	if len(names) != 5 {
+		t.Fatalf("Names() = %v, want 5 providers", names)
+	}
+	for i := 1; i < len(names); i++ {
+		if names[i] < names[i-1] {
+			t.Fatalf("Names() not sorted: %v", names)
+		}
+	}
+}
+
+// probeTrackedBody records whether Read was called so tests can assert that the
+// probe drained the response before closing it.
+type probeTrackedBody struct {
+	read bool
+}
+
+func (b *probeTrackedBody) Read(p []byte) (int, error) {
+	b.read = true
+	return 0, io.EOF
+}
+
+func (b *probeTrackedBody) Close() error { return nil }
+
+// probeFakeDoer returns a canned response with a tracked body.
+type probeFakeDoer struct {
+	body *probeTrackedBody
+}
+
+func (d *probeFakeDoer) Do(req *http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Body: d.body, Header: http.Header{}}, nil
+}
+
+func TestProviderProbeDrainsResponseBody(t *testing.T) {
+	body := &probeTrackedBody{}
+	client := &probeFakeDoer{body: body}
+	if err := provider.New("").Probe(context.Background(), "http://localhost:1234/v1", "", client); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	if !body.read {
+		t.Fatal("Probe must drain the response body so the connection can be reused")
 	}
 }
 

@@ -57,6 +57,24 @@ func New(name string) Provider {
 	return openAIProvider{}
 }
 
+// Known reports whether name identifies a registered provider. The empty name
+// is not known; callers treat it as "use the default".
+func Known(name string) bool {
+	_, ok := registeredProviders[name]
+	return ok
+}
+
+// Names returns the registered provider names in sorted order, for error
+// messages and help text.
+func Names() []string {
+	names := make([]string, 0, len(registeredProviders))
+	for name := range registeredProviders {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // openAICompat provides the standard OpenAI-compatible behavior: reachability
 // is probed against /models and model IDs are listed from it. Providers that
 // behave exactly like OpenAI's API embed this and only add a name.
@@ -88,6 +106,9 @@ func probeReachable(ctx context.Context, base, key string, client Doer, path str
 	if err != nil {
 		return fmt.Errorf("could not reach %s", base)
 	}
+	// Drain before closing so the connection is returned to the pool instead of
+	// being discarded.
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	return nil
 }

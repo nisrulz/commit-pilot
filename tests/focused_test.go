@@ -338,7 +338,7 @@ func TestResolveConfigDefersContextDetection(t *testing.T) {
 	}
 }
 
-func TestResolveConfigUnknownProviderFallsBack(t *testing.T) {
+func TestResolveConfigUnknownProviderRejected(t *testing.T) {
 	t.Setenv(lib.ConfigDirEnv, t.TempDir())
 	t.Setenv("OPENAI_PROVIDER", "nonsense")
 	t.Setenv("OPENAI_MODEL", "")
@@ -346,11 +346,60 @@ func TestResolveConfigUnknownProviderFallsBack(t *testing.T) {
 	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
 
 	cfg := lib.ResolveConfig(lib.RawFlags{})
+	if cfg.ResolveError == "" {
+		t.Fatal("expected a resolve error for an unknown provider")
+	}
+	if !strings.Contains(cfg.ResolveError, "unknown provider \"nonsense\"") {
+		t.Fatalf("resolve error = %q", cfg.ResolveError)
+	}
+}
+
+func TestResolveConfigCustomProviderRequiresBase(t *testing.T) {
+	t.Setenv(lib.ConfigDirEnv, t.TempDir())
+	t.Setenv("OPENAI_PROVIDER", "custom")
+	t.Setenv("OPENAI_MODEL", "")
+	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:9999/v1")
+	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+
+	cfg := lib.ResolveConfig(lib.RawFlags{})
+	if cfg.ResolveError != "" {
+		t.Fatalf("unexpected resolve error: %q", cfg.ResolveError)
+	}
+	if cfg.Provider != "custom" {
+		t.Fatalf("Provider = %q, want custom", cfg.Provider)
+	}
+	if cfg.APIBase != "http://127.0.0.1:9999/v1" {
+		t.Fatalf("APIBase = %q, want custom base", cfg.APIBase)
+	}
 	if cfg.Model != lib.DefaultModel {
 		t.Fatalf("expected default model fallback, got %q", cfg.Model)
 	}
-	if cfg.APIBase != lib.DefaultAPIBase {
-		t.Fatalf("expected default API base fallback, got %q", cfg.APIBase)
+}
+
+func TestResolveConfigCustomProviderRejectsMissingBase(t *testing.T) {
+	t.Setenv(lib.ConfigDirEnv, t.TempDir())
+	t.Setenv("OPENAI_PROVIDER", "custom")
+	t.Setenv("OPENAI_MODEL", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+
+	cfg := lib.ResolveConfig(lib.RawFlags{})
+	if cfg.ResolveError == "" || !strings.Contains(cfg.ResolveError, "requires OPENAI_BASE_URL") {
+		t.Fatalf("expected missing-base error, got %q", cfg.ResolveError)
+	}
+}
+
+func TestResolveConfigKnownProviderNoError(t *testing.T) {
+	for _, name := range []string{"openai", "ollama", "lmstudio", "unsloth"} {
+		t.Setenv(lib.ConfigDirEnv, t.TempDir())
+		t.Setenv("OPENAI_PROVIDER", name)
+		t.Setenv("OPENAI_MODEL", "")
+		t.Setenv("OPENAI_BASE_URL", "")
+		t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+
+		if cfg := lib.ResolveConfig(lib.RawFlags{}); cfg.ResolveError != "" {
+			t.Fatalf("provider %q: unexpected resolve error %q", name, cfg.ResolveError)
+		}
 	}
 }
 

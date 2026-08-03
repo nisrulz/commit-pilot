@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nisrulz/commit-pilot/src/lib/provider"
 )
 
 // Mode selects how changes are turned into commits.
@@ -54,6 +56,9 @@ type Config struct {
 	Output            io.Writer
 	JSON              bool
 	Quiet             bool
+	// ResolveError reports a configuration problem found while resolving, so
+	// Main can fail fast before any provider is contacted.
+	ResolveError string
 }
 
 // KnownProviders maps provider names to their default API base URLs.
@@ -242,16 +247,23 @@ func ResolveConfig(f RawFlags) Config {
 	if len(apiKey) > maxEnvAPIKeyLen {
 		apiKey = apiKey[:maxEnvAPIKeyLen]
 	}
-	provider := configValue("OPENAI_PROVIDER", defaults)
-	if provider == "" && apiBase == "" {
-		provider = "lmstudio"
+	providerName := configValue("OPENAI_PROVIDER", defaults)
+	var resolveError string
+	if providerName == "" && apiBase == "" {
+		providerName = "lmstudio"
 	}
-	if provider != "" {
+	if providerName != "" && !provider.Known(providerName) {
+		resolveError = fmt.Sprintf("unknown provider %q; supported providers: %s", providerName, strings.Join(provider.Names(), ", "))
+	}
+	if providerName == "custom" && apiBase == "" {
+		resolveError = "provider \"custom\" requires OPENAI_BASE_URL"
+	}
+	if providerName != "" {
 		if apiBase == "" {
-			apiBase = KnownProviders[provider]
+			apiBase = KnownProviders[providerName]
 		}
 		if model == "" {
-			model = ProviderDefaults[provider]
+			model = ProviderDefaults[providerName]
 		}
 	}
 
@@ -271,7 +283,7 @@ func ResolveConfig(f RawFlags) Config {
 	}
 
 	contextWindow := defaultContextWindow
-	autoContextWindow := provider == "lmstudio"
+	autoContextWindow := providerName == "lmstudio"
 	if cw := os.Getenv("COMMIT_PILOT_CONTEXT_WINDOW"); cw != "" {
 		autoContextWindow = false
 		if v, err := strconv.Atoi(cw); err == nil && v > 0 {
@@ -300,7 +312,7 @@ func ResolveConfig(f RawFlags) Config {
 
 	return Config{
 		Model:             model,
-		Provider:          provider,
+		Provider:          providerName,
 		APIBase:           apiBase,
 		APIKey:            apiKey,
 		DryRun:            f.DryRun,
@@ -329,6 +341,7 @@ func ResolveConfig(f RawFlags) Config {
 		Output:            os.Stdout,
 		JSON:              f.JSON,
 		Quiet:             f.Quiet,
+		ResolveError:      resolveError,
 	}
 }
 

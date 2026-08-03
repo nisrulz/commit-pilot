@@ -55,8 +55,6 @@ func TestParseEstimatedMemory_unknownUnit(t *testing.T) {
 	}
 }
 
-
-
 func TestModelInfo_serialization(t *testing.T) {
 	mi := &lib.ModelInfo{Key: "test-model", MaxContextLength: 131072}
 	if mi.Key != "test-model" {

@@ -22,6 +22,9 @@ func Main() {
 	}
 
 	cfg := ResolveConfig(flags)
+	if cfg.ResolveError != "" {
+		Die("config: %s", cfg.ResolveError)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	cfg.Context = ctx

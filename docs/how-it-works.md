@@ -1,11 +1,11 @@
 # How it works
 
-1. **Git scan** - collects staged or unstaged changes (staged preferred)
-2. **Token estimation** - estimates if diffs fit within model context window
-3. **Batching** - splits large diffs into manageable batches
-4. **AI analysis** - shows the configured destination, then sends selected diffs to it
-5. **Grouping** - the AI returns conventional commit messages with file groupings
-6. **Review and execution** - shows the plan, waits for confirmation, then stages and commits each logical group
+1. **Git scan**: collects staged or unstaged changes (staged preferred)
+2. **Token estimation**: checks if the diffs fit within the model context window
+3. **Batching**: splits large diffs into manageable batches
+4. **AI analysis**: shows the configured destination, then sends selected diffs to it
+5. **Grouping**: the AI returns conventional commit messages with file groupings
+6. **Review and execution**: shows the plan, waits for confirmation, then stages and commits each logical group
 
 ## Auto-chunk mode (default)
 
@@ -24,9 +24,9 @@ rm -rf ~/.commit-pilot/tmp
 
 Configuration lives separately in `~/.config/commit-pilot/`. Set
 `COMMIT_PILOT_CONFIG_DIR` to point elsewhere. Commit Pilot reads provider,
-model, and API-base defaults from `config.env` there, creates the file with the
-LM Studio defaults when missing, and gives environment variables precedence.
-This directory never holds temporary summaries.
+model, and API-base defaults from the `config.env` there. If the file is
+missing, it creates one with the LM Studio defaults. Environment variables
+always win. This directory never holds temporary summaries.
 
 For repository-specific message preferences, add `.commit-pilot/config.env`.
 The project file cannot set `OPENAI_PROVIDER`, `OPENAI_MODEL`, or
@@ -43,19 +43,14 @@ to apply the plan without a prompt:
 commit-pilot --yes
 ```
 
-Files with both staged and unstaged hunks are rejected before the provider is
-called. Commit or stash one side first so the generated plan matches the exact
-content that will be committed.
-
-Use `--cleanup` to remove the temp file automatically on success:
-
-```bash
-commit-pilot --cleanup
-```
+Commit Pilot rejects files with both staged and unstaged hunks before calling the
+provider. Commit or stash one side first so the plan matches the exact content
+that will be committed.
 
 ## Interrupt handling
 
-Press `Ctrl+C` during a provider request to cancel the request and any retry wait.
+Press `Ctrl+C` during a provider request to cancel the request and any pending
+retry.
 
 ## Single commit mode
 
@@ -90,9 +85,9 @@ commit-pilot --cleanup
 
 When changes exceed the model's context window (default 64k tokens), commit-pilot automatically:
 
-- **Batches** files into groups that fit within the window
-- **Chunks** oversized single files into line-aligned pieces where possible, including very long single lines
-- **Merges** chunk results into a single commit message
+- Batches files into groups that fit within the window
+- Chunks oversized single files into line-aligned pieces where possible, including very long single lines
+- Merges chunk results into a single commit message
 
 ### Dynamic context detection (LM Studio)
 
@@ -120,6 +115,12 @@ and `::1`.
 The tool has no telemetry. Selected diffs still go to the configured provider,
 so use LM Studio, Ollama, or another local provider when the code must stay on
 your machine.
+
+`OPENAI_PROVIDER` accepts `lmstudio`, `ollama`, `openai`, `unsloth`, and
+`custom`. An unknown provider name aborts before anything runs, so a typo can
+never silently fall back to a different endpoint. `custom` targets an
+OpenAI-compatible API without a dedicated backend and requires
+`OPENAI_BASE_URL`.
 
 ## Output
 
