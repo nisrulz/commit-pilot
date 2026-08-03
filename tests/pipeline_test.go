@@ -2,6 +2,7 @@ package lib_test
 
 import (
 	"encoding/json"
+	"fmt"
 	lib "github.com/nisrulz/commit-pilot/src/lib"
 	"strings"
 	"testing"
@@ -125,5 +126,103 @@ func TestFallbackPlan_invalidJSON(t *testing.T) {
 	groups := lib.FallbackPlan(`not json`)
 	if groups != nil {
 		t.Fatal("expected nil for invalid JSON")
+	}
+}
+
+func TestPlanFromSummariesFailsWhenNoJSONOnRetry(t *testing.T) {
+	doer := &recordingDoer{responses: []recordedResponse{
+		{status: 200, body: chatContent("no json here")},
+		{status: 200, body: chatContent("still no json")},
+	}}
+	cfg := cfgWithDoer(staticDoer{})
+	cfg.HTTPClient = doer
+	_, err := lib.PlanFromSummaries("Plan:\n{diff}", cfg, summariesJSON)
+	if err == nil {
+		t.Fatal("expected error when both attempts return no JSON")
+	}
+	if !strings.Contains(err.Error(), "extract plan") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func bigSummariesJSON(n, summaryLen int) string {
+	summaries := make([]lib.FileSummary, n)
+	for i := range summaries {
+		summaries[i] = lib.FileSummary{
+			File:    fmt.Sprintf("file%d.go", i),
+			Summary: strings.Repeat("x", summaryLen),
+			Changes: []string{"c"},
+		}
+	}
+	b, _ := json.Marshal(summaries)
+	return string(b)
+}
+
+func TestCompactSummariesForPlan_fits(t *testing.T) {
+	out := lib.CompactSummariesForPlan(summariesJSON, "Plan:\n{diff}", 65536)
+	if out != summariesJSON {
+		t.Fatal("expected unchanged input when it already fits")
+	}
+}
+
+func TestCompactSummariesForPlan_trims(t *testing.T) {
+	in := bigSummariesJSON(20, 5000)
+	origTokens := lib.EstimateTokens(in)
+	ctx := 16384
+	out := lib.CompactSummariesForPlan(in, "Plan:\n{diff}", ctx)
+	if out == in {
+		t.Fatal("expected compaction for oversized summaries")
+	}
+	var parsed []lib.FileSummary
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("compacted output is invalid JSON: %v", err)
+	}
+	if len(parsed) != 20 {
+		t.Fatalf("expected 20 summaries, got %d", len(parsed))
+	}
+	for i, s := range parsed {
+		if s.File != fmt.Sprintf("file%d.go", i) {
+			t.Fatalf("file path lost at index %d: %q", i, s.File)
+		}
+		if len([]rune(s.Summary)) >= 5000 {
+			t.Fatalf("summary %d not trimmed (%d runes)", i, len([]rune(s.Summary)))
+		}
+	}
+	if got := lib.EstimateTokens(out); got >= origTokens {
+		t.Fatalf("compaction did not reduce tokens: %d -> %d", origTokens, got)
+	}
+	if got := lib.EstimateTokens("Plan:\n" + out); got > ctx {
+		t.Fatalf("compacted prompt still exceeds context: %d > %d", got, ctx)
+	}
+}
+
+func TestCompactSummariesForPlan_keepsShortSummaries(t *testing.T) {
+	var original []lib.FileSummary
+	_ = json.Unmarshal([]byte(bigSummariesJSON(20, 5000)), &original)
+	original[0].Summary = "short"
+	b, _ := json.Marshal(original)
+	out := lib.CompactSummariesForPlan(string(b), "Plan:\n{diff}", 16384)
+	var parsed []lib.FileSummary
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("compacted output is invalid JSON: %v", err)
+	}
+	if parsed[0].Summary != "short" {
+		t.Fatalf("short summary should be kept as-is, got %q", parsed[0].Summary)
+	}
+}
+
+func TestCompactSummariesForPlan_zeroContext(t *testing.T) {
+	in := bigSummariesJSON(5, 2000)
+	out := lib.CompactSummariesForPlan(in, "Plan:\n{diff}", 0)
+	if out != in {
+		t.Fatal("expected unchanged input when no context window is known")
+	}
+}
+
+func TestCompactSummariesForPlan_invalidJSON(t *testing.T) {
+	in := strings.Repeat("nonsense ", 2000)
+	out := lib.CompactSummariesForPlan(in, "Plan:\n{diff}", 8000)
+	if out != in {
+		t.Fatal("expected unchanged input when summaries are unparseable")
 	}
 }

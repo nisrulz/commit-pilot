@@ -7,6 +7,10 @@ Return a JSON object with exactly two fields:
   Types: feat, fix, refactor, chore, docs, test, style
 - "description": a multi-line bullet-point description explaining what was changed and why
 
+JSON schema for the response object:
+- "subject" (string, required): type(scope): description, max 72 chars
+- "description" (string, required): multi-line bullet points
+
 Respond with ONLY valid JSON, no other text.
 
 Changes:
@@ -19,6 +23,11 @@ Return a SINGLE commit object (not an array) with:
 - "subject": conventional commit subject (type(scope): description, max 72 chars)
 - "description": multi-line description of changes in this commit
 - "files": array of file paths for THIS commit only
+
+JSON schema for the response object:
+- "subject" (string, required): type(scope): description, max 72 chars
+- "description" (string, required): multi-line bullet points
+- "files" (array of strings, required): file paths from the input, exactly as written
 
 STRICT RULES:
 - Only group files that share the SAME concern (e.g., all config, all docs, all scripts, all code)
@@ -43,6 +52,10 @@ Return a JSON object with:
 - "summary": one paragraph (max 100 words) describing what changed and why
 - "changes": array of short bullet-point descriptions of specific changes
 
+JSON schema for the response object:
+- "summary" (string, required): max 100 words
+- "changes" (array of strings, required): short bullet points
+
 Respond with ONLY valid JSON, no other text.
 
 File: {files}
@@ -57,6 +70,11 @@ Each summary describes changes to one file. Group related files that share the s
 Return ALL commit groups at once as a JSON array of commit objects:
 
 [{"subject": "type(scope): description", "description": "...", "files": ["path/to/file"]}]
+
+JSON schema for each commit object:
+- "subject" (string, required): type(scope): description, max 72 chars
+- "description" (string, required): multi-line bullet points
+- "files" (array of strings, required): file paths from the input, exactly as written
 
 STRICT RULES:
 - Group files by shared concern (config, docs, API, tests, infrastructure)
