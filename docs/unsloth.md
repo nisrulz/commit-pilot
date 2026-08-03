@@ -27,6 +27,13 @@ OPENAI_PROVIDER=unsloth OPENAI_API_KEY=sk-unsloth-... commit-pilot --doctor
 OPENAI_PROVIDER=unsloth OPENAI_API_KEY=sk-unsloth-... commit-pilot --list-models
 ```
 
+Unsloth Studio's API is key-protected, so `--doctor` reports reachability
+through the server's `/health` route and keeps the model check separate. You
+can confirm the server is running even before the key is configured; the key is
+still required for actual model calls.
+
+The default API base is `http://localhost:8888/v1`.
+
 The default model is `unsloth/gemma-4-E4B-it-qat-GGUF`. To use a different model name, set it explicitly:
 
 ```bash

@@ -6,17 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nisrulz/commit-pilot/src/lib/provider"
 )
 
 // MaxResponseSize caps how much of a provider response is read.
-const MaxResponseSize = 1 << 20
+const MaxResponseSize = provider.MaxResponseSize
 
 // HTTPDoer abstracts HTTP calls so tests can inject a fake client.
 type HTTPDoer interface {
@@ -210,25 +211,7 @@ func IsContextLengthError(errMsg string) bool {
 // ValidateProviderURL rejects malformed endpoints and plain HTTP outside the
 // local machine so repository data and API keys are never sent in clear text.
 func ValidateProviderURL(apiBase string) error {
-	u, err := url.Parse(apiBase)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return fmt.Errorf("invalid provider URL %q", apiBase)
-	}
-	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return fmt.Errorf("provider URL must not contain credentials, a query, or a fragment")
-	}
-	if u.Scheme == "http" && !isLoopbackHost(u.Hostname()) {
-		return fmt.Errorf("refusing plain HTTP provider %s; use HTTPS or a loopback address", u.Host)
-	}
-	return nil
-}
-
-func isLoopbackHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return provider.ValidateURL(apiBase)
 }
 
 func newProviderHTTPClient(timeout time.Duration) *http.Client {

@@ -33,7 +33,11 @@ We measure coverage for the `src/lib` package across both suites.
 
 The integration test runs commit-pilot against a real AI endpoint.
 
-The script checks that your AI provider is reachable before starting. If it is not, it prints setup instructions.
+The script checks that your AI provider is reachable before starting. Each
+known provider probes its own health URL, trying both `localhost` and
+`127.0.0.1`. Key-protected providers such as Unsloth Studio are detected through
+their `/health` route, so a running server is recognized even before the API key
+is configured. If nothing responds, it prints setup instructions.
 
 **LMStudio (default):**
 ```bash
@@ -54,7 +58,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1 \
 
 **Unsloth Studio:**
 ```bash
-OPENAI_BASE_URL=http://localhost:8888 make test-live
+OPENAI_BASE_URL=http://localhost:8888/v1 make test-live
 ```
 
 The script sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:

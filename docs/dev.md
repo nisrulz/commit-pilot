@@ -61,6 +61,12 @@ commit-pilot/
 │       ├── context.go    # Dynamic context window detection
 │       ├── doctor.go     # Doctor checks and model listing
 │       ├── output.go     # Terminal/JSON output helpers and fatal errors
+│       ├── provider/     # Pluggable model-serving backends (one file per provider)
+│       │   ├── provider.go   # Provider interface, registry, shared probe/listing helpers
+│       │   ├── openai.go     # OpenAI-compatible hosted endpoints
+│       │   ├── ollama.go     # Ollama local API
+│       │   ├── lmstudio.go   # LM Studio local API
+│       │   └── unsloth.go    # Unsloth Studio (health-probed, key-protected API)
 │       └── prompt.txt    # Default prompt templates (embedded)
 ├── tests/
 │   ├── *_test.go           # Unit tests (package lib_test)

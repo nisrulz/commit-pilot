@@ -16,29 +16,58 @@ die() { echo "  ! $1"; cleanup; exit 1; }
 run_in() { (cd "$1" && "$BINARY" ${2:-} --dry-run 2>&1 || true); }
 
 # --- pre-check: probe available AI providers ---
+# probe_endpoint tries the given probe URL and, for localhost endpoints, also
+# the 127.0.0.1 alias (some servers, e.g. Unsloth Studio, bind IPv4 only).
+# It returns 0 when the server answers.
 probe_endpoint() {
-  curl -sf "$1/models" >/dev/null 2>&1
+  probe_url="$1"
+  case "$probe_url" in
+    http://localhost:*)
+      for candidate in "$probe_url" "http://127.0.0.1${probe_url#http://localhost}"; do
+        probe_reachable "$candidate" && return 0
+      done
+      return 1
+      ;;
+    *)
+      probe_reachable "$probe_url"
+      ;;
+  esac
 }
 
+# probe_reachable returns 0 when the server answers at $1 with any HTTP
+# response. A 401 counts as reachable: the server is up but needs OPENAI_API_KEY
+# (sent along when set). Only a total connection failure (000) is a miss.
+probe_reachable() {
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+    ${OPENAI_API_KEY:+-H "Authorization: Bearer $OPENAI_API_KEY"} \
+    "$1")
+  [ "$code" != "000" ]
+}
+
+# Each known provider entry carries: name, API base for commit-pilot, provider
+# name, and the URL used to probe reachability. Unsloth Studio probes its UI
+# health route because its OpenAI API is key-protected.
 PROVIDERS=""
 if [ -n "${OPENAI_BASE_URL:-}" ]; then
   echo "  • Probing custom endpoint $OPENAI_BASE_URL ..."
-  if probe_endpoint "$OPENAI_BASE_URL"; then
+  if probe_endpoint "${OPENAI_BASE_URL%/}/models"; then
     PROVIDERS="custom"
+    API_BASE="$OPENAI_BASE_URL"
   fi
 else
   echo "  • Probing available AI providers ..."
-  for entry in "lmstudio|http://localhost:1234/v1|lmstudio" \
-               "ollama|http://localhost:11434/v1|ollama" \
-               "unsloth|http://localhost:8888/v1|unsloth"; do
+  for entry in "lmstudio|http://localhost:1234/v1|lmstudio|http://localhost:1234/v1/models" \
+               "ollama|http://localhost:11434/v1|ollama|http://localhost:11434/v1/models" \
+               "unsloth|http://localhost:8888/v1|unsloth|http://localhost:8888/health"; do
     name=$(echo "$entry" | cut -d'|' -f1)
-    url=$(echo "$entry" | cut -d'|' -f2)
+    api_base=$(echo "$entry" | cut -d'|' -f2)
     pname=$(echo "$entry" | cut -d'|' -f3)
-    printf "    %-12s %-30s " "$name" "$url"
-    if probe_endpoint "$url"; then
+    probe_url=$(echo "$entry" | cut -d'|' -f4)
+    printf "    %-12s %-30s " "$name" "$probe_url"
+    if probe_endpoint "$probe_url"; then
       echo "✓"
       PROVIDERS="$pname"
-      API_BASE="$url"
+      API_BASE="$api_base"
       break
     else
       echo "✗"
@@ -372,7 +401,7 @@ EOF
 git add -A && git commit -m "initial" -q
 
 # Delete one file, modify another
-git rm todelete.txt
+git rm -q todelete.txt
 echo "modified" > tokeep.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/deleted" "--single")

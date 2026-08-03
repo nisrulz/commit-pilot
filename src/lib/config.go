@@ -24,6 +24,7 @@ const (
 // value is filled in by ResolveConfig before a run starts.
 type Config struct {
 	Model             string
+	Provider          string
 	APIBase           string
 	APIKey            string
 	DryRun            bool
@@ -299,6 +300,7 @@ func ResolveConfig(f RawFlags) Config {
 
 	return Config{
 		Model:             model,
+		Provider:          provider,
 		APIBase:           apiBase,
 		APIKey:            apiKey,
 		DryRun:            f.DryRun,

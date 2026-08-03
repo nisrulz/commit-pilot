@@ -2,14 +2,10 @@ package lib
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"sort"
-	"strings"
-	"time"
+
+	"github.com/nisrulz/commit-pilot/src/lib/provider"
 )
 
 // runListModels prints the models available from the configured provider.
@@ -32,13 +28,18 @@ func runListModels(cfg Config) {
 func runDoctorCheck(cfg Config) {
 	if cfg.JSON {
 		_, gitErr := GitRun("rev-parse", "--show-toplevel")
-		found, providerErr := CheckProvider(cfg)
+		reachable := provider.New(cfg.Provider).Probe(runContext(cfg), cfg.APIBase, cfg.APIKey, cfg.HTTPClient) == nil
+		var found bool
+		var modelErr error
+		if reachable {
+			found, modelErr = CheckProvider(cfg)
+		}
 		status := "completed"
-		if gitErr != nil || providerErr != nil || !found {
+		if gitErr != nil || !reachable || modelErr != nil || !found {
 			status = "error"
 		}
-		PrintJSON(map[string]any{"status": status, "git_repository": gitErr == nil, "model": cfg.Model, "provider_reachable": providerErr == nil, "model_available": found})
-		if gitErr != nil || providerErr != nil || !found {
+		PrintJSON(map[string]any{"status": status, "git_repository": gitErr == nil, "model": cfg.Model, "provider_reachable": reachable, "model_available": found})
+		if gitErr != nil || !reachable || modelErr != nil || !found {
 			os.Exit(1)
 		}
 		return
@@ -68,6 +69,12 @@ func RunDoctor(cfg Config) bool {
 	fmt.Printf("    API key: %s\n", keyStatus)
 	fmt.Printf("    Config: %s/config.env\n", sanitizePath(ConfigDir()))
 
+	if err := provider.New(cfg.Provider).Probe(runContext(cfg), cfg.APIBase, cfg.APIKey, cfg.HTTPClient); err != nil {
+		fmt.Printf("  %s Provider: %v\n", red("!"), err)
+		return false
+	}
+	fmt.Printf("  %s Provider is reachable\n", green("✔"))
+
 	found, err := CheckProvider(cfg)
 	if err != nil {
 		fmt.Printf("  %s Provider: %v\n", red("!"), err)
@@ -77,7 +84,6 @@ func RunDoctor(cfg Config) bool {
 		fmt.Printf("  %s Model %q is not available from the provider\n", red("!"), sanitizeLine(cfg.Model, 1024))
 		return false
 	}
-	fmt.Printf("  %s Provider is reachable\n", green("✔"))
 	return ok
 }
 
@@ -94,62 +100,17 @@ func CheckProvider(cfg Config) (bool, error) {
 	return false, nil
 }
 
+// ListProviderModels returns the model IDs exposed by the provider configured in
+// cfg.Provider, delegating to the provider's own listing implementation.
 func ListProviderModels(cfg Config) ([]string, error) {
-	if err := ValidateProviderURL(cfg.APIBase); err != nil {
-		return nil, err
-	}
-	url := strings.TrimRight(cfg.APIBase, "/") + "/models"
-	ctx := cfg.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-	}
+	return provider.New(cfg.Provider).ListModels(runContext(cfg), cfg.APIBase, cfg.APIKey, cfg.HTTPClient)
+}
 
-	client := cfg.HTTPClient
-	if client == nil {
-		client = newProviderHTTPClient(10 * time.Second)
+// runContext returns the configured context, falling back to a background
+// context for runs that do not set one.
+func runContext(cfg Config) context.Context {
+	if cfg.Context != nil {
+		return cfg.Context
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("could not reach %s", cfg.APIBase)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("returned status %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		Data   []struct{ ID string } `json:"data"`
-		Models []struct {
-			ID  string `json:"id"`
-			Key string `json:"key"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, MaxResponseSize)).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("could not read model list")
-	}
-	seen := make(map[string]bool)
-	var models []string
-	for _, model := range payload.Data {
-		if model.ID != "" && !seen[model.ID] {
-			models = append(models, model.ID)
-			seen[model.ID] = true
-		}
-	}
-	for _, model := range payload.Models {
-		for _, name := range []string{model.ID, model.Key} {
-			if name != "" && !seen[name] {
-				models = append(models, name)
-				seen[name] = true
-			}
-		}
-	}
-	sort.Strings(models)
-	return models, nil
+	return context.Background()
 }
