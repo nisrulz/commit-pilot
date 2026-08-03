@@ -7,11 +7,12 @@ TESTDIR="$PROJECT_DIR/.temp-test"
 API_BASE="${OPENAI_BASE_URL:-http://localhost:1234/v1}"
 PASS=0
 FAIL=0
+RESULTS=$(mktemp "${TMPDIR:-/tmp}/commit-pilot-live.XXXXXX")
 
-ok() { echo "  ✓ $1"; PASS=$((PASS+1)); }
-fail() { echo "  ✗ $1"; FAIL=$((FAIL+1)); }
+ok() { echo "$1|$2|PASS" >> "$RESULTS"; PASS=$((PASS+1)); }
+fail() { echo "$1|$2|FAIL" >> "$RESULTS"; FAIL=$((FAIL+1)); }
 
-cleanup() { rm -rf "$TESTDIR"; }
+cleanup() { rm -rf "$TESTDIR"; rm -f "$RESULTS"; }
 die() { echo "  ! $1"; cleanup; exit 1; }
 run_in() { (cd "$1" && "$BINARY" ${2:-} --dry-run 2>&1 || true); }
 
@@ -55,7 +56,7 @@ if [ -n "${OPENAI_BASE_URL:-}" ]; then
     API_BASE="$OPENAI_BASE_URL"
   fi
 else
-  echo "  • Probing available AI providers ..."
+  echo "  • Probing available AI providers"
   for entry in "lmstudio|http://localhost:1234/v1|lmstudio|http://localhost:1234/v1/models" \
                "ollama|http://localhost:11434/v1|ollama|http://localhost:11434/v1/models" \
                "unsloth|http://localhost:8888/v1|unsloth|http://localhost:8888/health"; do
@@ -63,14 +64,13 @@ else
     api_base=$(echo "$entry" | cut -d'|' -f2)
     pname=$(echo "$entry" | cut -d'|' -f3)
     probe_url=$(echo "$entry" | cut -d'|' -f4)
-    printf "    %-12s %-30s " "$name" "$probe_url"
     if probe_endpoint "$probe_url"; then
-      echo "✓"
+      printf "      %-10s %-34s %s\n" "$name" "$probe_url" "✓"
       PROVIDERS="$pname"
       API_BASE="$api_base"
       break
     else
-      echo "✗"
+      printf "      %-10s %-34s %s\n" "$name" "$probe_url" "✗"
     fi
   done
 fi
@@ -108,15 +108,16 @@ echo "  ✓ Using provider: $PROVIDERS ($API_BASE)"
 
 # --- build ---
 make -C "$PROJECT_DIR" build || die "build failed"
-echo "  • Built commit-pilot"
 
 rm -rf "$TESTDIR"
+mkdir -p "$TESTDIR"
+(cd "$PROJECT_DIR" && go build -o "$TESTDIR/live-table" ./scripts/livetable) || die "table renderer build failed"
 
 # --- test 1: outside git repo ---
 NONGIT=$(mktemp -d /tmp/commit-pilot-nongit.XXXXXX)
 OUT=$(run_in "$NONGIT")
 rm -rf "$NONGIT"
-echo "$OUT" | grep -q "not a git repository" && ok "detects non-git directory" || fail "should detect non-git directory"
+echo "$OUT" | grep -q "not a git repository" && ok "repo & changes" "detects non-git directory" || fail "repo & changes" "should detect non-git directory"
 
 # --- test 2: empty repo, no changes ---
 git init -q "$TESTDIR/repo"
@@ -124,7 +125,7 @@ git -C "$TESTDIR/repo" config user.email "test@test"
 git -C "$TESTDIR/repo" config user.name "Test"
 git -C "$TESTDIR/repo" commit --allow-empty -m "init" -q
 OUT=$(run_in "$TESTDIR/repo")
-echo "$OUT" | grep -q "No changes to commit" && ok "detects no changes" || fail "should detect no changes"
+echo "$OUT" | grep -q "No changes to commit" && ok "repo & changes" "detects no changes" || fail "repo & changes" "should detect no changes"
 
 # --- test 3: multi-file changes, dry-run ---
 cd "$TESTDIR/repo"
@@ -180,12 +181,12 @@ git reset --soft HEAD~3
 cd "$PROJECT_DIR"
 
 OUT=$(run_in "$TESTDIR/repo")
-echo "$OUT" | grep -q "changed files\|changed file" && ok "detects changed files" || fail "should detect changed files"
-echo "$OUT" | grep -q -i "Found\|logical\|Generating\|commit message" && ok "reaches AI stage" || fail "should reach AI stage"
+echo "$OUT" | grep -q "changed files\|changed file" && ok "repo & changes" "detects changed files" || fail "repo & changes" "should detect changed files"
+echo "$OUT" | grep -q -i "Found\|logical\|Generating\|commit message" && ok "repo & changes" "reaches AI stage" || fail "repo & changes" "should reach AI stage"
 
 # --- test 4: single mode ---
 OUT=$(run_in "$TESTDIR/repo" "--single")
-echo "$OUT" | grep -q -i "Generating\|AI call" && ok "single mode reaches AI stage" || fail "single mode should reach AI stage"
+echo "$OUT" | grep -q -i "Generating\|AI call" && ok "repo & changes" "single mode reaches AI stage" || fail "repo & changes" "single mode should reach AI stage"
 
 # --- test 5: binary file handling (standalone repo) ---
 mkdir -p "$TESTDIR/binary"
@@ -198,10 +199,9 @@ printf '\xff\xd8\xff\xe0\x00\x10\x4a\x46\x49\x46' > logo.bin
 git add logo.bin
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/binary" "--single")
-echo "$OUT" | grep -q "binary" && ok "detects binary files" || fail "should detect binary files"
+echo "$OUT" | grep -q "binary" && ok "binary files" "detects binary files" || fail "binary files" "should detect binary files"
 
 # --- test 6: large diff triggers batching ---
-echo "  • Testing large diff batching..."
 mkdir -p "$TESTDIR/large"
 cd "$TESTDIR/large"
 git init -q
@@ -252,18 +252,16 @@ git add -A
 cd "$PROJECT_DIR"
 
 OUT=$(run_in "$TESTDIR/large" "--single")
-echo "$OUT" | grep -q "changed file\|15" && ok "large diff detects all files" || fail "large diff should detect all files"
-echo "$OUT" | grep -q -i "Generating\|commit message" && ok "large diff processes" || fail "large diff should process"
+echo "$OUT" | grep -q "changed file\|15" && ok "large diffs" "large diff detects all files" || fail "large diffs" "large diff should detect all files"
+echo "$OUT" | grep -q -i "Generating\|commit message" && ok "large diffs" "large diff processes" || fail "large diffs" "large diff should process"
 
 # --- test 7: context window configuration ---
-echo "  • Testing context window configuration..."
 cd "$TESTDIR/repo"
 # Small context window should trigger batching warning
 OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=1000 run_in "$TESTDIR/repo" "--single" 2>&1 || true)
-echo "$OUT" | grep -q -i "batch\|Large diff\|token" && ok "small context window triggers batching" || fail "small context window should trigger batching"
+echo "$OUT" | grep -q -i "batch\|Large diff\|token" && ok "large diffs" "small context window triggers batching" || fail "large diffs" "small context window should trigger batching"
 
 # --- test 8: empty diff (no actual changes) ---
-echo "  • Testing empty diff scenario..."
 mkdir -p "$TESTDIR/emptydiff"
 cd "$TESTDIR/emptydiff"
 git init -q
@@ -280,10 +278,9 @@ git add -A && git commit -m "initial" -q
 git add test.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/emptydiff" "--single")
-echo "$OUT" | grep -q -i "No changes\|no diff\|cannot generate\|empty" && ok "empty diff handled" || fail "empty diff should show appropriate message"
+echo "$OUT" | grep -q -i "No changes\|no diff\|cannot generate\|empty" && ok "edge cases" "empty diff handled" || fail "edge cases" "empty diff should show appropriate message"
 
 # --- test 9: very large single file diff ---
-echo "  • Testing very large single file diff..."
 mkdir -p "$TESTDIR/hugefile"
 cd "$TESTDIR/hugefile"
 git init -q
@@ -303,10 +300,9 @@ done >> huge.go
 git add huge.go
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/hugefile" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|batch\|token\|Large" && ok "large single file processed" || fail "large single file should be processed"
+echo "$OUT" | grep -q -i "Generating\|commit message\|batch\|token\|Large" && ok "large diffs" "large single file processed" || fail "large diffs" "large single file should be processed"
 
 # --- test 10: unicode filenames ---
-echo "  • Testing unicode filenames..."
 mkdir -p "$TESTDIR/unicode"
 cd "$TESTDIR/unicode"
 git init -q
@@ -329,10 +325,9 @@ echo 'func bonjour() {}' >> "cafe.go"
 git add -A
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/unicode" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "unicode filenames handled" || fail "unicode filenames should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "path edge cases" "unicode filenames handled" || fail "path edge cases" "unicode filenames should be handled"
 
 # --- test 11: mixed staged and unstaged changes ---
-echo "  • Testing mixed staged/unstaged changes..."
 mkdir -p "$TESTDIR/mixed"
 cd "$TESTDIR/mixed"
 git init -q
@@ -358,10 +353,9 @@ cd "$PROJECT_DIR"
 
 # With staged changes only (staged.txt and both.txt)
 OUT=$(run_in "$TESTDIR/mixed" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "mixed changes processed" || fail "mixed changes should be processed"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "repo & changes" "mixed changes processed" || fail "repo & changes" "mixed changes should be processed"
 
 # --- test 12: file with special characters in diff ---
-echo "  • Testing special characters in diff..."
 mkdir -p "$TESTDIR/special"
 cd "$TESTDIR/special"
 git init -q
@@ -383,10 +377,9 @@ echo "line with unicode accents" >> special.txt
 git add special.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/special" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "special characters handled" || fail "special characters should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "edge cases" "special characters handled" || fail "edge cases" "special characters should be handled"
 
 # --- test 13: deleted files ---
-echo "  • Testing deleted files..."
 mkdir -p "$TESTDIR/deleted"
 cd "$TESTDIR/deleted"
 git init -q
@@ -405,10 +398,9 @@ git rm -q todelete.txt
 echo "modified" > tokeep.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/deleted" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "deleted files handled" || fail "deleted files should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "path edge cases" "deleted files handled" || fail "path edge cases" "deleted files should be handled"
 
 # --- test 14: renamed files ---
-echo "  • Testing renamed files..."
 mkdir -p "$TESTDIR/renamed"
 cd "$TESTDIR/renamed"
 git init -q
@@ -423,10 +415,9 @@ git add -A && git commit -m "initial" -q
 git mv oldname.txt newname.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/renamed" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "renamed files handled" || fail "renamed files should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "path edge cases" "renamed files handled" || fail "path edge cases" "renamed files should be handled"
 
 # --- test 15: symlinked files ---
-echo "  • Testing symlinked files..."
 mkdir -p "$TESTDIR/symlink"
 cd "$TESTDIR/symlink"
 git init -q
@@ -442,10 +433,9 @@ git add -A && git commit -m "initial" -q
 echo "modified content" > real.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/symlink" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "symlinked files handled" || fail "symlinked files should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "path edge cases" "symlinked files handled" || fail "path edge cases" "symlinked files should be handled"
 
 # --- test 16: deeply nested directory ---
-echo "  • Testing deeply nested directory..."
 mkdir -p "$TESTDIR/nested/a/b/c/d/e/f/g"
 cd "$TESTDIR/nested"
 git init -q
@@ -460,10 +450,9 @@ echo "modified" > a/b/c/d/e/f/g/deep.txt
 git add a/b/c/d/e/f/g/deep.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/nested" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "deeply nested directory handled" || fail "deeply nested directory should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "path edge cases" "deeply nested directory handled" || fail "path edge cases" "deeply nested directory should be handled"
 
 # --- test 17: file with spaces in path ---
-echo "  • Testing file with spaces in path..."
 mkdir -p "$TESTDIR/spaces/my folder"
 cd "$TESTDIR/spaces"
 git init -q
@@ -478,10 +467,9 @@ echo "modified" > "my folder/file with spaces.txt"
 git add "my folder/file with spaces.txt"
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/spaces" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with spaces in path handled" || fail "file with spaces in path should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "path edge cases" "file with spaces in path handled" || fail "path edge cases" "file with spaces in path should be handled"
 
 # --- test 18: empty file (0 bytes) ---
-echo "  • Testing empty file..."
 mkdir -p "$TESTDIR/emptyfile"
 cd "$TESTDIR/emptyfile"
 git init -q
@@ -495,10 +483,9 @@ echo "was empty" > empty.txt
 git add empty.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/emptyfile" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "empty file handled" || fail "empty file should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "edge cases" "empty file handled" || fail "edge cases" "empty file should be handled"
 
 # --- test 19: multiple binary formats ---
-echo "  • Testing multiple binary formats..."
 mkdir -p "$TESTDIR/multibinary"
 cd "$TESTDIR/multibinary"
 git init -q
@@ -515,10 +502,9 @@ dd if=/dev/urandom bs=100 count=10 of=file.gz 2>/dev/null
 git add file.gz
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/multibinary" "--single")
-echo "$OUT" | grep -q -i "binary" && ok "multiple binary formats handled" || fail "multiple binary formats should be handled"
+echo "$OUT" | grep -q -i "binary" && ok "binary files" "multiple binary formats handled" || fail "binary files" "multiple binary formats should be handled"
 
 # --- test 20: small binary file detection ---
-echo "  • Testing small binary file detection..."
 mkdir -p "$TESTDIR/smallbinary"
 cd "$TESTDIR/smallbinary"
 git init -q
@@ -535,10 +521,9 @@ git add small.gz
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/smallbinary" "--single")
 # Small binaries may be treated as text, but should not crash
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file\|binary" && ok "small binary files handled" || fail "small binary files should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file\|binary" && ok "binary files" "small binary files handled" || fail "binary files" "small binary files should be handled"
 
 # --- test 20: file with only newlines ---
-echo "  • Testing file with only newlines..."
 mkdir -p "$TESTDIR/newlines"
 cd "$TESTDIR/newlines"
 git init -q
@@ -551,10 +536,9 @@ printf 'line1\n\n\n\n' > newlines.txt
 git add newlines.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/newlines" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "file with newlines handled" || fail "file with newlines should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|changed file" && ok "edge cases" "file with newlines handled" || fail "edge cases" "file with newlines should be handled"
 
 # --- test 22: pre-commit hook rejection ---
-echo "  • Testing pre-commit hook rejection..."
 mkdir -p "$TESTDIR/hooks"
 cd "$TESTDIR/hooks"
 git init -q
@@ -578,11 +562,10 @@ cd "$PROJECT_DIR"
 if (cd "$TESTDIR/hooks" && "$BINARY" --single --yes < /dev/null >/dev/null 2>&1); then
   fail "hook rejection should cause failure"
 else
-  ok "hook rejection causes failure"
+  ok "failure modes" "hook rejection causes failure"
 fi
 
 # --- test 23: file deleted between diff and commit ---
-echo "  • Testing file deleted during processing..."
 mkdir -p "$TESTDIR/race"
 cd "$TESTDIR/race"
 git init -q
@@ -604,10 +587,9 @@ rm file2.txt
 cd "$PROJECT_DIR"
 # Should handle missing file gracefully
 OUT=$(run_in "$TESTDIR/race" "--single" 2>&1 || true)
-echo "$OUT" | grep -q -i "Generating\|commit message\|error\|warning\|file" && ok "deleted file race handled" || fail "deleted file race should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|error\|warning\|file" && ok "failure modes" "deleted file race handled" || fail "failure modes" "deleted file race should be handled"
 
 # --- test 24: binary file mixed with text ---
-echo "  • Testing binary mixed with text files..."
 mkdir -p "$TESTDIR/mixedbin"
 cd "$TESTDIR/mixedbin"
 git init -q
@@ -624,10 +606,9 @@ dd if=/dev/urandom bs=1024 count=5 of=image.png 2>/dev/null
 git add -A
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/mixedbin" "--single")
-echo "$OUT" | grep -q -i "Generating\|commit message\|binary" && ok "mixed binary/text handled" || fail "mixed binary/text should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|binary" && ok "binary files" "mixed binary/text handled" || fail "binary files" "mixed binary/text should be handled"
 
 # --- test 25: huge single-file diff triggers cross-LLM-call chunking ---
-echo "  • Testing huge single-file diff chunking..."
 mkdir -p "$TESTDIR/hugediff"
 cd "$TESTDIR/hugediff"
 git init -q
@@ -667,11 +648,10 @@ cd "$PROJECT_DIR"
 
 # Force small context window to ensure chunking is triggered
 OUT=$(COMMIT_PILOT_CONTEXT_WINDOW=8192 run_in "$TESTDIR/hugediff" "--single" 2>&1 || true)
-echo "$OUT" | grep -qi "Chunk " && ok "huge diff chunked across multiple LLM calls" || fail "huge diff should show 'Chunk 1/N' processing messages"
-echo "$OUT" | grep -qi "Generating\|committed\|dry-run" && ok "huge diff completes successfully" || fail "huge diff should complete successfully"
+echo "$OUT" | grep -qi "Chunk " && ok "large diffs" "huge diff chunked across multiple LLM calls" || fail "large diffs" "huge diff should show 'Chunk 1/N' processing messages"
+echo "$OUT" | grep -qi "Generating\|committed\|dry-run" && ok "large diffs" "huge diff completes successfully" || fail "large diffs" "huge diff should complete successfully"
 
 # --- test 26: commit message subject line truncation ---
-echo "  • Testing subject line truncation..."
 mkdir -p "$TESTDIR/truncation"
 cd "$TESTDIR/truncation"
 git init -q
@@ -686,11 +666,11 @@ git add long.txt
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/truncation" "--single")
 # Subject should be truncated to 100 chars, not crash
-echo "$OUT" | grep -q -i "Generating\|commit message\|committed" && ok "subject truncation handled" || fail "subject truncation should be handled"
+echo "$OUT" | grep -q -i "Generating\|commit message\|committed" && ok "edge cases" "subject truncation handled" || fail "edge cases" "subject truncation should be handled"
 
 # --- report ---
-echo "  ─────────────────────────────"
-echo "  Results: $PASS passed, $FAIL failed"
+echo ""
+"$TESTDIR/live-table" < "$RESULTS"
 
 cleanup
 

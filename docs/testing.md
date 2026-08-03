@@ -36,7 +36,12 @@ defaults point at the official GitHub endpoints.
 make test
 ```
 
-We measure coverage for the `src/lib` package across both suites.
+`make test` runs the full suite and reports the results grouped into readable
+categories such as `Planning`, `LLM & Providers`, and `End To End`, with
+coverage and pass, fail, and skip totals. It fails the build when any test
+fails.
+
+Coverage is measured for the `src/lib` package across both suites.
 
 ## Live test
 
@@ -70,22 +75,25 @@ OPENAI_BASE_URL=https://api.openai.com/v1 \
 OPENAI_BASE_URL=http://localhost:8888/v1 make test-live
 ```
 
-The script sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
+The script sets up a temporary git repo with staged changes across docs,
+config, and code, then runs commit-pilot in dry-run mode. Results are grouped
+into titled tables such as `repo & changes` and `binary files`, with pass and
+fail totals when the run finishes. It checks for:
 
-- Git repo detection (running outside a git repo prints an error)
-- No changes (an empty repo prints a message)
-- Multi-file changes (counts changed files and reaches the AI stage)
-- Single mode (`--single` reaches the AI stage)
-- Binary files (small binaries commit without a model call; mixed binary and text changes stay grouped)
-- Large diffs (many files split into window-sized batches; oversized files and long lines chunk across LLM calls)
-- Context window limits (a small window triggers batching warnings)
-- Empty diffs (a staged file with no real change)
-- Staged and unstaged changes (a mixed working tree)
-- Partially staged files (rejected before a model call)
-- Path edge cases (unicode names, spaces, deeply nested directories, symlinks, renames, deletions)
-- Diff edge cases (special characters, empty files, newline-only files)
-- Failure modes (a pre-commit hook rejection fails the run; a file deleted mid-run)
-- Subject truncation (long commit subjects are cut to the configured limit)
+- **Repo & Changes**: running outside a git repo, an empty repo, multi-file
+  changes that reach the AI stage, single mode, and a mixed staged and
+  unstaged working tree
+- **Binary Files**: detecting binary files, multiple binary formats, small
+  binaries, and binary mixed with text
+- **Large Diffs**: many files split into window-sized batches, a small context
+  window that triggers batching, a very large single file, and a huge diff
+  that chunks across LLM calls
+- **Path Edge Cases**: unicode names, deleted files, renames, symlinks, deeply
+  nested directories, and spaces in paths
+- **Diff Edge Cases**: empty diffs, special characters, empty files,
+  newline-only files, and subject-line truncation
+- **Failure Modes**: a pre-commit hook rejection fails the run, and a file
+  deleted mid-run
 
 Use `commit-pilot --doctor` to verify a local provider before running the live
 test. `commit-pilot --list-models` shows the model IDs the provider exposes.

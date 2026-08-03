@@ -33,15 +33,14 @@ vet:
 	@echo "  ✓ go vet passed"
 
 test:
-	@go test -count=1 ./tests/... -coverpkg=./src/lib/,./src/lib/provider/
-	@echo "  ✓ all tests passed"
+	@go run ./scripts/testtable
 
 test-cover:
 	@go test -count=1 -coverprofile=/tmp/cov.out -coverpkg=./src/lib/,./src/lib/provider/ ./tests/...
 	@go tool cover -func=/tmp/cov.out | tail -1
 	@rm /tmp/cov.out
 
-test-live: build
+test-live:
 	@scripts/live-test.sh
 
 setup:
