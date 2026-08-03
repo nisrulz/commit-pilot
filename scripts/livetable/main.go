@@ -1,15 +1,20 @@
-// Command livetable renders the live-test results as grouped tables. It reads
-// one "category|test|status" line per test from stdin and prints a table per
-// category, so the shell-driven live test keeps a clean, readable report.
+// Command livetable runs the live test suite under a working spinner and
+// renders the results as grouped tables. It drives scripts/live-test.sh, which
+// makes the real AI calls, and prints the script's output once it finishes so
+// the spinner stays clean on screen.
 package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/nisrulz/commit-pilot/internal/spinner"
 	"github.com/nisrulz/commit-pilot/scripts/tab"
 )
 
@@ -21,8 +26,61 @@ type outcome struct {
 }
 
 func main() {
-	rows, pass, fail := readResults(os.Stdin)
-	renderReport(os.Stdout, rows, pass, fail)
+	results, err := os.CreateTemp("", "commit-pilot-live.XXXXXX")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not create results file: %v\n", err)
+		os.Exit(1)
+	}
+	resultsPath := results.Name()
+	defer os.Remove(resultsPath)
+
+	script := filepath.Join(repoRoot(), "scripts", "live-test.sh")
+	var outBuf, errBuf bytes.Buffer
+	runErr := runScript(script, resultsPath, &outBuf, &errBuf)
+
+	os.Stdout.Write(outBuf.Bytes())
+	os.Stderr.Write(errBuf.Bytes())
+
+	rows, pass, fail := readResultsFile(resultsPath)
+	if len(rows) > 0 {
+		renderReport(os.Stdout, rows, pass, fail)
+	}
+	if fail > 0 || runErr != nil {
+		os.Exit(1)
+	}
+}
+
+// runScript executes the given shell script under a working spinner, capturing
+// its stdout and stderr into the given writers. The results file path is passed
+// to the script so it knows where to record test outcomes.
+func runScript(script, resultsPath string, out, errOut io.Writer) error {
+	cmd := exec.Command(script)
+	cmd.Env = append(os.Environ(), "COMMIT_PILOT_LIVE_RESULTS="+resultsPath)
+	cmd.Stdout = out
+	cmd.Stderr = errOut
+	stop := spinner.Start()
+	defer stop()
+	return cmd.Run()
+}
+
+// repoRoot returns the repository root. make targets run from the root, so the
+// current working directory is the repo root.
+func repoRoot() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return dir
+}
+
+// readResultsFile loads the outcomes from the results file the script wrote.
+func readResultsFile(path string) ([]outcome, int, int) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, 0
+	}
+	defer f.Close()
+	return readResults(f)
 }
 
 // readResults parses "category|name|status" lines from r, skipping blank and

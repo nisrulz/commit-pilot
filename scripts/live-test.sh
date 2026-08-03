@@ -7,12 +7,15 @@ TESTDIR="$PROJECT_DIR/.temp-test"
 API_BASE="${OPENAI_BASE_URL:-http://localhost:1234/v1}"
 PASS=0
 FAIL=0
-RESULTS=$(mktemp "${TMPDIR:-/tmp}/commit-pilot-live.XXXXXX")
+RESULTS="${COMMIT_PILOT_LIVE_RESULTS:-$(mktemp "${TMPDIR:-/tmp}/commit-pilot-live.XXXXXX")}"
 
 ok() { echo "$1|$2|PASS" >> "$RESULTS"; PASS=$((PASS+1)); }
 fail() { echo "$1|$2|FAIL" >> "$RESULTS"; FAIL=$((FAIL+1)); }
 
-cleanup() { rm -rf "$TESTDIR"; rm -f "$RESULTS"; }
+cleanup() {
+  rm -rf "$TESTDIR"
+  if [ -z "${COMMIT_PILOT_LIVE_RESULTS:-}" ]; then rm -f "$RESULTS"; fi
+}
 die() { echo "  ! $1"; cleanup; exit 1; }
 run_in() { (cd "$1" && "$BINARY" ${2:-} --dry-run 2>&1 || true); }
 
@@ -111,7 +114,6 @@ make -C "$PROJECT_DIR" build || die "build failed"
 
 rm -rf "$TESTDIR"
 mkdir -p "$TESTDIR"
-(cd "$PROJECT_DIR" && go build -o "$TESTDIR/live-table" ./scripts/livetable) || die "table renderer build failed"
 
 # --- test 1: outside git repo ---
 NONGIT=$(mktemp -d /tmp/commit-pilot-nongit.XXXXXX)
@@ -669,8 +671,11 @@ OUT=$(run_in "$TESTDIR/truncation" "--single")
 echo "$OUT" | grep -q -i "Generating\|commit message\|committed" && ok "edge cases" "subject truncation handled" || fail "edge cases" "subject truncation should be handled"
 
 # --- report ---
-echo ""
-"$TESTDIR/live-table" < "$RESULTS"
+if [ -z "${COMMIT_PILOT_LIVE_RESULTS:-}" ]; then
+  (cd "$PROJECT_DIR" && go build -o "$TESTDIR/live-table" ./scripts/livetable) || die "table renderer build failed"
+  echo ""
+  "$TESTDIR/live-table" < "$RESULTS"
+fi
 
 cleanup
 

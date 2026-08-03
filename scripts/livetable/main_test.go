@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -42,5 +44,41 @@ func TestRenderReport_groupsByCategory(t *testing.T) {
 	}
 	if strings.Index(out, "Binary Files") > strings.Index(out, "Repo & Changes") {
 		t.Errorf("expected binary files group before repo & changes:\n%s", out)
+	}
+}
+
+func TestRunScript_RecordsResults(t *testing.T) {
+	dir := t.TempDir()
+	results := filepath.Join(dir, "results")
+	script := filepath.Join(dir, "suite.sh")
+	body := "#!/bin/sh\n" +
+		"printf 'suite output line\\n'\n" +
+		"echo 'repo & changes|detects non-git directory|PASS' >> \"$COMMIT_PILOT_LIVE_RESULTS\"\n" +
+		"echo 'repo & changes|detects no changes|FAIL' >> \"$COMMIT_PILOT_LIVE_RESULTS\"\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if err := runScript(script, results, &out, &errOut); err != nil {
+		t.Fatalf("runScript: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "suite output line") {
+		t.Fatalf("script stdout not captured: %q", out.String())
+	}
+	rows, pass, fail := readResultsFile(results)
+	if pass != 1 || fail != 1 || len(rows) != 2 {
+		t.Fatalf("pass=%d fail=%d rows=%d, want 1/1/2", pass, fail, len(rows))
+	}
+	if rows[0].category != "repo & changes" || rows[0].name != "detects non-git directory" {
+		t.Fatalf("unexpected first row: %#v", rows[0])
+	}
+}
+
+func TestReadResultsFile_missing(t *testing.T) {
+	rows, pass, fail := readResultsFile(filepath.Join(t.TempDir(), "nope"))
+	if len(rows) != 0 || pass != 0 || fail != 0 {
+		t.Fatalf("expected empty result set, got %#v %d %d", rows, pass, fail)
 	}
 }

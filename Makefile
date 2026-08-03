@@ -41,7 +41,7 @@ test-cover:
 	@rm /tmp/cov.out
 
 test-live:
-	@scripts/live-test.sh
+	@go run ./scripts/livetable
 
 setup:
 	@scripts/setup-$(PROVIDER).sh
