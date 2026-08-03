@@ -79,7 +79,7 @@ func runPlanLint(cfg Config, changes *Changes) {
 	if cfg.JSON {
 		PrintJSON(map[string]any{"status": "valid"})
 	} else if !cfg.Quiet {
-		fmt.Println("  Plan is valid.")
+		Success("Plan is valid.")
 	}
 }
 
@@ -290,7 +290,7 @@ func writePlanIfRequested(path string, groups []CommitGroup) {
 func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 	if !IsQuietOutput() {
 		fmt.Println()
-		fmt.Println("  Checking for any remaining uncommitted changes...")
+		PrintProcessing("Checking for any remaining uncommitted changes...")
 	}
 
 	status, err := GitRun("status", "--porcelain")
@@ -300,7 +300,7 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	if status == "" {
 		if !IsQuietOutput() {
-			fmt.Printf("  %s Working directory is clean. Exiting successfully.\n", green("✔"))
+			Success("Working directory is clean. Exiting successfully.")
 		}
 		return ""
 	}
@@ -318,7 +318,7 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	if len(remainingChanges.AllFiles) == 0 {
 		if !IsQuietOutput() {
-			fmt.Printf("  %s No changes remain to commit after filtering. Exiting.\n", green("✔"))
+			Success("No changes remain to commit after filtering. Exiting.")
 		}
 		return ""
 	}
@@ -335,11 +335,11 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 	finalStatus, _ := GitRun("status", "--porcelain")
 	if finalStatus == "" {
 		if !IsQuietOutput() {
-			fmt.Printf("  %s Clean Checkout Successful\n", green("✔"))
+			Success("Clean Checkout Successful")
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "  %s CRITICAL WARNING: Final git status still shows uncommitted changes:\n", red("🚨"))
-		fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), finalStatus)
+		Warning(finalStatus)
 		os.Exit(1)
 	}
 	return path

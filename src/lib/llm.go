@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -210,7 +209,7 @@ func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens
 		// Try to extract a clean message from provider JSON error responses.
 		clean := cleanAPIError(errMsg)
 		if clean != "" {
-			fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), sanitizeLine(clean, 1000))
+			Warning(clean)
 			return "", fmt.Errorf("request failed")
 		}
 		return "", fmt.Errorf("request failed (status %d)", status)

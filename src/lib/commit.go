@@ -36,13 +36,13 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool, max
 	if !dryRun {
 		if scope != ScopeStaged {
 			if _, err := GitRun(append([]string{"add", "--"}, files...)...); err != nil {
-				fmt.Fprintf(os.Stderr, "  ! git add failed: %v\n", err)
+				Errorf("git add failed: %v", err)
 				return false
 			}
 		}
 		commitArgs := append([]string{"commit", "--only", "-m", subject, "-m", description, "--"}, files...)
 		if _, err := GitRun(commitArgs...); err != nil {
-			fmt.Fprintf(os.Stderr, "  ! git commit failed: %v\n", err)
+			Errorf("git commit failed: %v", err)
 			return false
 		}
 	}
@@ -68,14 +68,14 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 		in = os.Stdin
 	}
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "  Proposed commit plan:")
+	fmt.Fprintf(out, "  %s\n", bold("Proposed commit plan:"))
 	for i, group := range groups {
 		group = NormalizeCommitGroup(group)
-		fmt.Fprintf(out, "    %d. %s\n", i+1, group.Subject)
+		fmt.Fprintf(out, "    %d. %s\n", i+1, bold(group.Subject))
 		if description := strings.TrimSpace(group.Description); description != "" {
 			fmt.Fprintf(out, "       %s\n", description)
 		}
-		fmt.Fprintf(out, "       Files: %s\n", strings.Join(sanitizePaths(group.Files), ", "))
+		fmt.Fprintf(out, "       %s %s\n", cyan("Files:"), cyan(strings.Join(sanitizePaths(group.Files), ", ")))
 	}
 
 	if cfg.DryRun {
@@ -83,7 +83,7 @@ func ConfirmCommitPlan(groups []CommitGroup, cfg Config, fingerprint string) boo
 	}
 	current, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil || current.Fingerprint != fingerprint {
-		fmt.Fprintln(out, "  Changes were updated while the plan was being generated. Please run commit-pilot again.")
+		fmt.Fprintf(out, "  %s Changes were updated while the plan was being generated. Please run commit-pilot again.\n", yellow("!"))
 		return false
 	}
 	if cfg.Yes {

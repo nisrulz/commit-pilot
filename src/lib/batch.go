@@ -2,7 +2,6 @@ package lib
 
 import (
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -16,7 +15,7 @@ func SplitFilesIntoBatches(template string, files []FileDiff, contextWindow int)
 
 	diffBudget := AvailableDiffTokens(template, contextWindow)
 	if diffBudget <= 0 {
-		fmt.Fprintf(os.Stderr, "  %s Context window too small for any diff content\n", yellow("!"))
+		Warning("Context window too small for any diff content")
 		return [][]FileDiff{files}
 	}
 

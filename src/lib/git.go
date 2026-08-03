@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -151,7 +150,7 @@ func GetGitChangesForScope(scope ChangeScope) (*Changes, error) {
 
 		if raw == "" {
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  ! warning: could not diff %s: %v\n", sanitizePath(f), err)
+				Warningf("warning: could not diff %s: %v", sanitizePath(f), err)
 			}
 			continue
 		}

@@ -101,7 +101,7 @@ func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 		return "", fmt.Errorf("marshal summaries: %w", err)
 	}
 	if err := os.WriteFile(dst, out, 0600); err != nil {
-		fmt.Fprintf(os.Stderr, "  ! warning: could not write summaries: %v\n", err)
+		Warningf("warning: could not write summaries: %v", err)
 	}
 	return string(out), nil
 }
@@ -160,7 +160,7 @@ func FallbackSummary(text, file string) FileSummary {
 	if len([]rune(first)) > 200 {
 		first = string([]rune(first)[:200]) + "..."
 	}
-	fmt.Fprintf(os.Stderr, "  %s could not parse summary for %s\n", yellow("!"), sanitizePath(file))
+	Warningf("could not parse summary for %s", sanitizePath(file))
 	fmt.Fprintf(os.Stderr, "    response: %s\n", first)
 
 	summary := truncateSanitizedText(text, MaxSummaryLen)

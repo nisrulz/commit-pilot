@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/nisrulz/commit-pilot/internal/spinner"
 )
 
 var (
@@ -54,7 +55,7 @@ func Die(format string, args ...any) {
 	if IsJSONOutput() {
 		PrintError(message)
 	} else {
-		fmt.Fprintf(os.Stderr, "  ! %s\n", sanitizeLine(message, 2000))
+		Error(message)
 	}
 	os.Exit(1)
 }
@@ -147,6 +148,49 @@ func PrintProcessing(msg string) {
 		return
 	}
 	fmt.Printf("  %s %s\n", yellow(">"), sanitizeLine(msg, 2000))
+}
+
+// Success prints a green confirmation line to stdout, honoring quiet mode.
+func Success(msg string) {
+	if quietOutput {
+		return
+	}
+	fmt.Printf("  %s %s\n", green("✔"), sanitizeLine(msg, 2000))
+}
+
+// Successf prints a formatted green confirmation line to stdout.
+func Successf(format string, args ...any) {
+	Success(fmt.Sprintf(format, args...))
+}
+
+// Warning prints a yellow warning line to stderr.
+func Warning(msg string) {
+	fmt.Fprintf(os.Stderr, "  %s %s\n", yellow("!"), sanitizeLine(msg, 2000))
+}
+
+// Warningf prints a formatted yellow warning line to stderr.
+func Warningf(format string, args ...any) {
+	Warning(fmt.Sprintf(format, args...))
+}
+
+// Error prints a red error line to stderr.
+func Error(msg string) {
+	fmt.Fprintf(os.Stderr, "  %s %s\n", red("!"), sanitizeLine(msg, 2000))
+}
+
+// Errorf prints a formatted red error line to stderr.
+func Errorf(format string, args ...any) {
+	Error(fmt.Sprintf(format, args...))
+}
+
+// startSpinner shows an animated working indicator during a long-running
+// operation unless output is suppressed (quiet or JSON mode). It returns a
+// function that stops and clears the spinner.
+func startSpinner() func() {
+	if quietOutput {
+		return func() {}
+	}
+	return spinner.Start()
 }
 
 func PrintCommitSection(subject, description string, filePaths []string, dryRun bool) {

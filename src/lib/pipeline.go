@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -47,7 +46,7 @@ func PlanFromSummaries(tmpl string, cfg Config, summariesJSON string) ([]CommitG
 			if len(groups) == 0 {
 				return nil, fmt.Errorf("AI response was not in the expected format")
 			}
-			fmt.Fprintf(os.Stderr, "  %s Could not parse AI plan, grouping all files into one commit\n", yellow("!"))
+			Warning("Could not parse AI plan, grouping all files into one commit")
 		}
 	}
 
@@ -58,10 +57,11 @@ func PlanFromSummaries(tmpl string, cfg Config, summariesJSON string) ([]CommitG
 	return NormalizeCommitGroups(groups), nil
 }
 
-// callPlanLLM sends the planning prompt, retrying once with a larger output
-// budget if the model's response was cut off mid-generation.
+// callPlanLLM sends the planning prompt under a working spinner, retrying once
+// with a larger output budget if the model's response was cut off mid-
+// generation.
 func callPlanLLM(prompt string, cfg Config) (string, error) {
-	result, err := CallLLM(prompt, cfg, DefaultMaxTokens)
+	result, err := callLLMWithSpinner(prompt, cfg, DefaultMaxTokens)
 	if err == nil {
 		return result, nil
 	}
@@ -70,7 +70,14 @@ func callPlanLLM(prompt string, cfg Config) (string, error) {
 		return "", err
 	}
 	PrintProcessing("Plan was cut off, retrying with a larger output budget...")
-	return CallLLM(prompt, cfg, DefaultMaxTokens*2)
+	return callLLMWithSpinner(prompt, cfg, DefaultMaxTokens*2)
+}
+
+// callLLMWithSpinner runs a single LLM call under a working spinner.
+func callLLMWithSpinner(prompt string, cfg Config, maxTokens int) (string, error) {
+	stop := startSpinner()
+	defer stop()
+	return CallLLM(prompt, cfg, maxTokens)
 }
 
 // CompactSummariesForPlan shrinks the summaries so the planning prompt fits the

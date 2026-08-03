@@ -50,7 +50,9 @@ that will be committed.
 ## Interrupt handling
 
 Press `Ctrl+C` during a provider request to cancel the request and any pending
-retry.
+retry. While the model is generating, an animated working indicator shows
+progress; it is hidden in `--quiet` and `--json` runs and whenever the output
+is not a terminal.
 
 ## Single commit mode
 

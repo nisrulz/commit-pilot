@@ -154,7 +154,7 @@ func ConfigDefaults() map[string]string {
 				if isProjectPreference(key) {
 					values[key] = value
 				} else {
-					fmt.Fprintf(os.Stderr, "  ! ignoring non-message setting %s from project config\n", key)
+					Warningf("ignoring non-message setting %s from project config", key)
 				}
 			}
 		}
@@ -184,7 +184,7 @@ func readConfigFile(file *os.File) map[string]string {
 		}
 		key, value, ok := strings.Cut(line, "=")
 		if !ok {
-			fmt.Fprintln(os.Stderr, "  ! ignoring invalid config line")
+			Warning("ignoring invalid config line")
 			continue
 		}
 		key = strings.TrimSpace(key)
@@ -192,16 +192,16 @@ func readConfigFile(file *os.File) map[string]string {
 		switch key {
 		case "OPENAI_PROVIDER", "OPENAI_MODEL", "OPENAI_BASE_URL", "COMMIT_PILOT_CONVENTIONAL_COMMITS", "COMMIT_PILOT_TICKET_PREFIX", "COMMIT_PILOT_IMPERATIVE_TONE", "COMMIT_PILOT_MAX_SUBJECT_LENGTH", "COMMIT_PILOT_BODY_STYLE":
 			if !validConfigValue(key, value) {
-				fmt.Fprintf(os.Stderr, "  ! ignoring invalid config value for %s\n", key)
+				Warningf("ignoring invalid config value for %s", key)
 				continue
 			}
 			values[key] = value
 		default:
-			fmt.Fprintf(os.Stderr, "  ! ignoring unsupported config key: %s\n", key)
+			Warningf("ignoring unsupported config key: %s", key)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "  ! could not read config file: %v\n", err)
+		Warningf("could not read config file: %v", err)
 	}
 	return values
 }

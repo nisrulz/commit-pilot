@@ -73,3 +73,44 @@ func TestWrapText_singleChar(t *testing.T) {
 		t.Fatalf("expected ['a'], got %v", lines)
 	}
 }
+
+func TestSuccessOutput(t *testing.T) {
+	lib.SetOutputMode(false, false)
+	out := captureStdout(t, func() { lib.Success("plan is valid") })
+	if !strings.Contains(out, "✔") || !strings.Contains(out, "plan is valid") {
+		t.Fatalf("unexpected success output: %q", out)
+	}
+}
+
+func TestSuccessHonorsQuietMode(t *testing.T) {
+	lib.SetOutputMode(true, false)
+	out := captureStdout(t, func() { lib.Success("hidden") })
+	if out != "" {
+		t.Fatalf("expected no output in quiet mode, got %q", out)
+	}
+	lib.SetOutputMode(false, false)
+}
+
+func TestSuccessfOutput(t *testing.T) {
+	lib.SetOutputMode(false, false)
+	out := captureStdout(t, func() { lib.Successf("plan %s valid", "is") })
+	if !strings.Contains(out, "plan is valid") {
+		t.Fatalf("unexpected success output: %q", out)
+	}
+}
+
+func TestWarningOutput(t *testing.T) {
+	lib.SetOutputMode(false, false)
+	out := captureStderr(t, func() { lib.Warning("could not diff file") })
+	if !strings.Contains(out, "!") || !strings.Contains(out, "could not diff file") {
+		t.Fatalf("unexpected warning output: %q", out)
+	}
+}
+
+func TestErrorOutput(t *testing.T) {
+	lib.SetOutputMode(false, false)
+	out := captureStderr(t, func() { lib.Error("git commit failed") })
+	if !strings.Contains(out, "!") || !strings.Contains(out, "git commit failed") {
+		t.Fatalf("unexpected error output: %q", out)
+	}
+}
