@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,11 +14,15 @@ import (
 
 // mockOpenAI is an OpenAI-compatible HTTP server whose /chat/completions
 // responses are derived from the incoming prompt via a responder function. It
-// also records every call so tests can assert on call counts and prompts.
+// also records every call so tests can assert on call counts and prompts. The
+// optional status and reason hooks let tests simulate provider rejections and
+// truncated completions.
 type mockOpenAI struct {
 	server      *httptest.Server
 	chatCalls   int
 	chatPrompts []string
+	status      func(prompt string, hasResponseFormat bool) int
+	reason      func(prompt string) string
 	mu          sync.Mutex
 }
 
@@ -51,9 +56,23 @@ func newMockOpenAI(t *testing.T, respond func(prompt string) string) *mockOpenAI
 			m.chatCalls++
 			m.chatPrompts = append(m.chatPrompts, prompt)
 			m.mu.Unlock()
+
+			if m.status != nil {
+				if code := m.status(prompt, bytes.Contains(body, []byte("response_format"))); code != http.StatusOK {
+					w.WriteHeader(code)
+					_, _ = w.Write([]byte(`{"error":{"message":"mock rejection"}}`))
+					return
+				}
+			}
+
+			reason := "stop"
+			if m.reason != nil {
+				reason = m.reason(prompt)
+			}
 			resp, _ := json.Marshal(map[string]any{
 				"choices": []any{map[string]any{
-					"message": map[string]any{"role": "assistant", "content": respond(prompt)},
+					"message":       map[string]any{"role": "assistant", "content": respond(prompt)},
+					"finish_reason": reason,
 				}},
 			})
 			_, _ = w.Write(resp)
