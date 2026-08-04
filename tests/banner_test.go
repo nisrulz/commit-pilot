@@ -7,8 +7,8 @@ import (
 )
 
 func TestVersionConstant(t *testing.T) {
-	if lib.Version != "1.0.8" {
-		t.Fatalf("Version = %q, want 1.0.8", lib.Version)
+	if lib.Version != "1.0.9" {
+		t.Fatalf("Version = %q, want 1.0.9", lib.Version)
 	}
 }
 
@@ -24,7 +24,7 @@ func TestPrintBannerShowsHeader(t *testing.T) {
 	if !strings.Contains(out, "AUTONOMOUS AI-POWERED COMMIT AGENT") {
 		t.Fatalf("banner missing tagline: %q", out)
 	}
-	if !strings.Contains(out, "v1.0.8") {
+	if !strings.Contains(out, "v1.0.9") {
 		t.Fatalf("banner missing version: %q", out)
 	}
 }

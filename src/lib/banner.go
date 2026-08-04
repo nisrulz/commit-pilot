@@ -3,7 +3,7 @@ package lib
 import "fmt"
 
 // Version is the commit-pilot release version shown in the startup banner.
-const Version = "1.0.8"
+const Version = "1.0.9"
 
 // bannerSeparatorWidth matches the width of the banner art, so the separator
 // rule that closes the header spans the full width of the word.
