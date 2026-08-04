@@ -20,7 +20,7 @@ help:
 
 build:
 	@go build -o $(BINARY) ./src/
-	@echo "  ✓ Built $(BINARY)"
+	@printf "  \033[1;32m✓\033[0m Built $(BINARY)\n"
 
 install: build
 	@mkdir -p ~/go/bin

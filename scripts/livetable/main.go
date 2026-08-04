@@ -1,18 +1,20 @@
-// Command livetable runs the live test suite under a working spinner and
-// renders the results as grouped tables. It drives scripts/live-test.sh, which
-// makes the real AI calls, and prints the script's output once it finishes so
-// the spinner stays clean on screen.
+// Command livetable runs the live test suite and renders the results as
+// grouped tables. It drives scripts/live-test.sh, which makes the real AI
+// calls, streaming the script's output as it happens so the probing and build
+// steps appear immediately. A working spinner takes over once the build
+// finishes, during the silent test phase.
 package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/nisrulz/commit-pilot/internal/spinner"
 	"github.com/nisrulz/commit-pilot/internal/table"
@@ -25,6 +27,10 @@ type outcome struct {
 	status   string
 }
 
+// buildMarker is the line emitted by `make build` that ends the setup phase;
+// the spinner starts once it is seen.
+const buildMarker = "Built commit-pilot"
+
 func main() {
 	results, err := os.CreateTemp("", "commit-pilot-live.XXXXXX")
 	if err != nil {
@@ -35,11 +41,10 @@ func main() {
 	defer os.Remove(resultsPath)
 
 	script := filepath.Join(repoRoot(), "scripts", "live-test.sh")
-	var outBuf, errBuf bytes.Buffer
-	runErr := runScript(script, resultsPath, &outBuf, &errBuf)
-
-	os.Stdout.Write(outBuf.Bytes())
-	os.Stderr.Write(errBuf.Bytes())
+	handle := spinner.StartPaused()
+	var spinning atomic.Bool
+	runErr := runScript(script, resultsPath, handle, &spinning)
+	handle.Stop()
 
 	rows, pass, fail := readResultsFile(resultsPath)
 	if len(rows) > 0 {
@@ -50,17 +55,50 @@ func main() {
 	}
 }
 
-// runScript executes the given shell script under a working spinner, capturing
-// its stdout and stderr into the given writers. The results file path is passed
-// to the script so it knows where to record test outcomes.
-func runScript(script, resultsPath string, out, errOut io.Writer) error {
+// runScript executes the given shell script, streaming its stdout and stderr
+// as lines arrive. The spinner stays hidden until the build line appears, then
+// runs during the silent test phase; each streamed line pauses it so the
+// output is never overwritten.
+func runScript(script, resultsPath string, handle *spinner.Handle, spinning *atomic.Bool) error {
 	cmd := exec.Command(script)
 	cmd.Env = append(os.Environ(), "COMMIT_PILOT_LIVE_RESULTS="+resultsPath)
-	cmd.Stdout = out
-	cmd.Stderr = errOut
-	stop := spinner.Start()
-	defer stop()
-	return cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); pumpOutput(handle, spinning, stdout, os.Stdout) }()
+	go func() { defer wg.Done(); pumpOutput(handle, spinning, stderr, os.Stderr) }()
+	runErr := cmd.Wait()
+	wg.Wait()
+	return runErr
+}
+
+// pumpOutput forwards each line of r to w as it arrives, pausing the spinner
+// while the line is written so streamed output is never overwritten by the
+// animation. Once the build line is seen, the spinner resumes after every
+// line and runs during the silent stretches.
+func pumpOutput(handle *spinner.Handle, spinning *atomic.Bool, r io.Reader, w io.Writer) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		handle.Pause()
+		fmt.Fprintln(w, line)
+		if strings.Contains(line, buildMarker) || spinning.Load() {
+			spinning.Store(true)
+			handle.Resume()
+		}
+	}
 }
 
 // repoRoot returns the repository root. make targets run from the root, so the

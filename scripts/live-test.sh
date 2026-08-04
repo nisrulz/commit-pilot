@@ -12,12 +12,54 @@ RESULTS="${COMMIT_PILOT_LIVE_RESULTS:-$(mktemp "${TMPDIR:-/tmp}/commit-pilot-liv
 ok() { echo "$1|$2|PASS" >> "$RESULTS"; PASS=$((PASS+1)); }
 fail() { echo "$1|$2|FAIL" >> "$RESULTS"; FAIL=$((FAIL+1)); }
 
+# ANSI color escapes for terminal output; left empty when stdout is not a TTY
+# so piped/redirected output stays plain.
+if [ -t 1 ]; then
+  C_BOLD=$(printf '\033[1m')
+  C_CYAN=$(printf '\033[36m')
+  C_GREEN=$(printf '\033[32m')
+  C_RED=$(printf '\033[31m')
+  C_DIM=$(printf '\033[2m')
+  C_RESET=$(printf '\033[0m')
+else
+  C_BOLD=""
+  C_CYAN=""
+  C_GREEN=""
+  C_RED=""
+  C_DIM=""
+  C_RESET=""
+fi
+
 cleanup() {
   rm -rf "$TESTDIR"
   if [ -z "${COMMIT_PILOT_LIVE_RESULTS:-}" ]; then rm -f "$RESULTS"; fi
 }
-die() { echo "  ! $1"; cleanup; exit 1; }
+die() { echo "  ${C_RED}${C_BOLD}! $1${C_RESET}"; cleanup; exit 1; }
 run_in() { (cd "$1" && "$BINARY" ${2:-} --dry-run 2>&1 || true); }
+
+# probe_header prints the probe section heading.
+probe_header() {
+  echo "  ${C_CYAN}${C_BOLD}• $1${C_RESET}"
+}
+
+# probe_row prints one provider reachability result, green for reachable and
+# red for unreachable.
+probe_row() {
+  name="$1"
+  url="$2"
+  mark="${C_RED}✗${C_RESET}"
+  if [ "$3" = "1" ]; then
+    mark="${C_GREEN}✓${C_RESET}"
+  fi
+  printf "      ${C_BOLD}%-10s${C_RESET} ${C_DIM}%-34s${C_RESET} %s\n" "$name" "$url" "$mark"
+}
+
+# provider_selected prints the provider chosen for the run.
+provider_selected() {
+  name="$1"
+  base="$2"
+  echo "  ${C_GREEN}✓${C_RESET} ${C_BOLD}Using provider: $name${C_RESET} (${C_DIM}$base${C_RESET})"
+}
 
 # --- pre-check: probe available AI providers ---
 # probe_endpoint tries the given probe URL and, for localhost endpoints, also
@@ -53,13 +95,13 @@ probe_reachable() {
 # health route because its OpenAI API is key-protected.
 PROVIDERS=""
 if [ -n "${OPENAI_BASE_URL:-}" ]; then
-  echo "  • Probing custom endpoint $OPENAI_BASE_URL ..."
+  probe_header "Probing custom endpoint $OPENAI_BASE_URL ..."
   if probe_endpoint "${OPENAI_BASE_URL%/}/models"; then
     PROVIDERS="custom"
     API_BASE="$OPENAI_BASE_URL"
   fi
 else
-  echo "  • Probing available AI providers"
+  probe_header "Probing available AI providers"
   for entry in "lmstudio|http://localhost:1234/v1|lmstudio|http://localhost:1234/v1/models" \
                "ollama|http://localhost:11434/v1|ollama|http://localhost:11434/v1/models" \
                "unsloth|http://localhost:8888/v1|unsloth|http://localhost:8888/health"; do
@@ -68,37 +110,37 @@ else
     pname=$(echo "$entry" | cut -d'|' -f3)
     probe_url=$(echo "$entry" | cut -d'|' -f4)
     if probe_endpoint "$probe_url"; then
-      printf "      %-10s %-34s %s\n" "$name" "$probe_url" "✓"
+      probe_row "$name" "$probe_url" 1
       PROVIDERS="$pname"
       API_BASE="$api_base"
       break
     else
-      printf "      %-10s %-34s %s\n" "$name" "$probe_url" "✗"
+      probe_row "$name" "$probe_url" 0
     fi
   done
 fi
 
 if [ -z "$PROVIDERS" ]; then
   echo ""
-  echo "  ! Cannot reach any AI API."
+  echo "  ${C_RED}${C_BOLD}! Cannot reach any AI API.${C_RESET}"
   echo ""
   echo "    Start one of these providers:"
   echo ""
-  echo "    LMStudio (default):"
+  echo "    ${C_CYAN}${C_BOLD}LMStudio (default):${C_RESET}"
   echo "      \$ lms server start"
   echo "      \$ lms get gemma-4-e2b-it-qat -y"
   echo "      URL: http://localhost:1234/v1"
   echo ""
-  echo "    Ollama:"
+  echo "    ${C_CYAN}${C_BOLD}Ollama:${C_RESET}"
   echo "      \$ ollama serve"
   echo "      \$ ollama pull gemma4:e2b-it-qat"
   echo "      URL: http://localhost:11434/v1"
   echo ""
-  echo "    Unsloth Studio:"
+  echo "    ${C_CYAN}${C_BOLD}Unsloth Studio:${C_RESET}"
   echo "      \$ unsloth run --model unsloth/Qwen3-1.7B-GGUF -p 8888"
   echo "      URL: http://localhost:8888/v1"
   echo ""
-  echo "    Or set a custom endpoint:"
+  echo "    ${C_CYAN}${C_BOLD}Or set a custom endpoint:${C_RESET}"
   echo "      \$ OPENAI_BASE_URL=<url> make test-live"
   echo ""
   cleanup
@@ -107,7 +149,7 @@ fi
 
 export OPENAI_BASE_URL="$API_BASE"
 export OPENAI_PROVIDER="$PROVIDERS"
-echo "  ✓ Using provider: $PROVIDERS ($API_BASE)"
+provider_selected "$PROVIDERS" "$API_BASE"
 
 # --- build ---
 make -C "$PROJECT_DIR" build || die "build failed"

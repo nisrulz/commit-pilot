@@ -10,6 +10,19 @@ func TestStart(t *testing.T) {
 	stop()
 }
 
+func TestStartPausedStartsHidden(t *testing.T) {
+	h := StartPaused()
+	h.Resume()
+	h.Pause()
+	h.Stop()
+}
+
+func TestHandleStopIsIdempotent(t *testing.T) {
+	h := StartPaused()
+	h.Stop()
+	h.Stop()
+}
+
 func TestSpinnerFrames_singleWidth(t *testing.T) {
 	if len(spinnerFrames) < 2 {
 		t.Fatalf("expected several frames, got %d", len(spinnerFrames))

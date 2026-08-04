@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/nisrulz/commit-pilot/internal/spinner"
 )
 
 func TestReadResults_counts(t *testing.T) {
@@ -59,14 +62,13 @@ func TestRunScript_RecordsResults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var out, errOut bytes.Buffer
-	if err := runScript(script, results, &out, &errOut); err != nil {
+	handle := spinner.StartPaused()
+	defer handle.Stop()
+	var spinning atomic.Bool
+	if err := runScript(script, results, handle, &spinning); err != nil {
 		t.Fatalf("runScript: %v", err)
 	}
 
-	if !strings.Contains(out.String(), "suite output line") {
-		t.Fatalf("script stdout not captured: %q", out.String())
-	}
 	rows, pass, fail := readResultsFile(results)
 	if pass != 1 || fail != 1 || len(rows) != 2 {
 		t.Fatalf("pass=%d fail=%d rows=%d, want 1/1/2", pass, fail, len(rows))
