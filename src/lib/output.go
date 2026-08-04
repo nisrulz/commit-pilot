@@ -129,11 +129,12 @@ func WrapText(text string, width int) []string {
 }
 
 var (
-	green  = color.New(color.FgGreen).SprintfFunc()
-	yellow = color.New(color.FgYellow).SprintfFunc()
-	cyan   = color.New(color.FgCyan).SprintfFunc()
-	bold   = color.New(color.Bold).SprintfFunc()
-	red    = color.New(color.FgRed).SprintfFunc()
+	green   = color.New(color.FgGreen).SprintfFunc()
+	yellow  = color.New(color.FgYellow).SprintfFunc()
+	cyan    = color.New(color.FgCyan).SprintfFunc()
+	magenta = color.New(color.FgMagenta).SprintfFunc()
+	bold    = color.New(color.Bold).SprintfFunc()
+	red     = color.New(color.FgRed).SprintfFunc()
 )
 
 func PrintStep(msg string) {
@@ -191,6 +192,45 @@ func startSpinner() func() {
 		return func() {}
 	}
 	return spinner.Start()
+}
+
+// PrintProbeHeader reports that provider reachability is being checked.
+func PrintProbeHeader(msg string) {
+	if quietOutput {
+		return
+	}
+	fmt.Printf("  %s %s\n", cyan("•"), sanitizeLine(msg, 2000))
+}
+
+// PrintProbeResult prints one provider reachability row, green for reachable
+// and red for unreachable.
+func PrintProbeResult(name, url string, ok bool) {
+	if quietOutput {
+		return
+	}
+	mark := red("✗")
+	if ok {
+		mark = green("✓")
+	}
+	fmt.Printf("      %-10s %-34s %s\n", name, url, mark)
+}
+
+// PrintProviderSelected confirms the provider chosen for the run and the model
+// it will use.
+func PrintProviderSelected(name, base, model string) {
+	if quietOutput {
+		return
+	}
+	fmt.Printf("  %s Using provider: %s (%s)\n", green("✓"), bold(name), base)
+	fmt.Printf("    -> Model: %s\n", sanitizeLine(model, 1024))
+}
+
+// PrintSeparator prints the rule that closes the startup header.
+func PrintSeparator() {
+	if quietOutput {
+		return
+	}
+	fmt.Println(strings.Repeat("=", bannerSeparatorWidth))
 }
 
 func PrintCommitSection(subject, description string, filePaths []string, dryRun bool) {

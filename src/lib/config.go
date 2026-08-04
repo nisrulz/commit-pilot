@@ -56,6 +56,13 @@ type Config struct {
 	Output            io.Writer
 	JSON              bool
 	Quiet             bool
+	// ProviderExplicit reports that the user chose a provider by name, so the
+	// startup probe must respect that name instead of identifying what runs at
+	// the endpoint.
+	ProviderExplicit bool
+	// APIBaseExplicit reports that a non-default OPENAI_BASE_URL was configured,
+	// so the startup probe must identify which provider is running there.
+	APIBaseExplicit bool
 	// ResolveError reports a configuration problem found while resolving, so
 	// Main can fail fast before any provider is contacted.
 	ResolveError string
@@ -267,6 +274,18 @@ func ResolveConfig(f RawFlags) Config {
 		}
 	}
 
+	// The startup probe respects a provider chosen by name, identifies which
+	// provider runs at a customized endpoint, and otherwise auto-detects among
+	// the bundled local servers.
+	providerExplicit := false
+	if configured := configValue("OPENAI_PROVIDER", defaults); configured != "" && configured != "lmstudio" {
+		providerExplicit = true
+	}
+	apiBaseExplicit := false
+	if configured := configValue("OPENAI_BASE_URL", defaults); configured != "" && configured != DefaultAPIBase {
+		apiBaseExplicit = true
+	}
+
 	if model == "" {
 		model = DefaultModel
 	}
@@ -341,6 +360,8 @@ func ResolveConfig(f RawFlags) Config {
 		Output:            os.Stdout,
 		JSON:              f.JSON,
 		Quiet:             f.Quiet,
+		ProviderExplicit:  providerExplicit,
+		APIBaseExplicit:   apiBaseExplicit,
 		ResolveError:      resolveError,
 	}
 }

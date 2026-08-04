@@ -33,13 +33,20 @@ func Main() {
 		// Keep stdout clean for the JSON result; progress and prompts go to stderr.
 		cfg.Output = os.Stderr
 	}
-
 	switch {
 	case flags.ListModels:
+		PrintBanner()
+		PrintSeparator()
 		runListModels(cfg)
 	case flags.Doctor:
+		PrintBanner()
+		PrintSeparator()
 		runDoctorCheck(cfg)
 	default:
+		PrintBanner()
+		PrintSeparator()
+		cfg = AnnounceProvider(cfg)
+		PrintSeparator()
 		runWorkflow(cfg)
 	}
 }
