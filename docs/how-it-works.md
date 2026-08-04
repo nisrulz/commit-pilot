@@ -1,11 +1,21 @@
 # How it works
 
-1. **Git scan**: collects staged or unstaged changes (staged preferred)
-2. **Token estimation**: checks if the diffs fit within the model context window
-3. **Batching**: splits large diffs into manageable batches
-4. **AI analysis**: shows the configured destination, then sends selected diffs to it
-5. **Grouping**: the AI returns conventional commit messages with file groupings
-6. **Review and execution**: shows the plan, waits for confirmation, then stages and commits each logical group
+1. **Provider probe**: verifies the AI endpoint is reachable; with no explicit provider, auto-detects the first running local server (LM Studio, Ollama, or Unsloth Studio)
+2. **Git scan**: collects staged or unstaged changes (staged preferred)
+3. **Token estimation**: checks if the diffs fit within the model context window
+4. **Batching**: splits large diffs into manageable batches
+5. **AI analysis**: sends selected diffs to the provider
+6. **Grouping**: the AI returns conventional commit messages with file groupings
+7. **Review and execution**: shows the plan, waits for confirmation, then stages and commits each logical group
+
+## Provider auto-detection
+
+When no provider is configured explicitly, commit-pilot probes the bundled
+local providers in order and selects the first one that responds. The
+configured model is left untouched. An explicit `OPENAI_PROVIDER` or
+`OPENAI_BASE_URL` is always respected, and if nothing is reachable the run
+continues with the configured provider so the provider's own error surfaces at
+the API call.
 
 ## Auto-chunk mode (default)
 

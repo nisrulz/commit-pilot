@@ -37,6 +37,10 @@ That's it. Review the proposed commits and press enter. No Go needed; `make
 install` works from source with Go 1.25+. The installer verifies a SHA-256
 checksum before installing.
 
+When no provider is configured explicitly, Commit Pilot probes LM Studio,
+Ollama, and Unsloth Studio and auto-selects the first one that is running, so
+pointing it at a local server needs no setup.
+
 ## Providers
 
 `OPENAI_PROVIDER` picks your backend: `lmstudio` (default), `ollama`, `unsloth`,

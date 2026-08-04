@@ -37,9 +37,12 @@ commit-pilot/
 │   └── logo.svg
 ├── scripts/
 │   ├── install.sh        # One-line install script
+│   ├── live-test.sh      # Live integration test driver
+│   ├── livetable/        # Renders live-test results (make test-live)
 │   ├── setup-lmstudio.sh # LMStudio model download
 │   ├── setup-ollama.sh   # Ollama model download
-│   └── setup-path.sh     # PATH setup helper
+│   ├── setup-path.sh     # PATH setup helper
+│   └── testtable/        # Renders unit/e2e results (make test)
 ├── src/
 │   ├── main.go           # CLI entry point (thin wrapper)
 │   └── lib/
@@ -60,10 +63,13 @@ commit-pilot/
 │       ├── pipeline.go   # Summarization & planning pipeline
 │       ├── summarize.go  # Per-file diff summarization
 │       ├── tokens.go     # Token estimation and context-fit checks
+│       ├── banner.go     # Startup banner rendering and version
+│       ├── banner_art.go # Banner ASCII art and tagline
 │       ├── batch.go      # Batch splitting and diff chunking
 │       ├── context.go    # Dynamic context window detection
 │       ├── doctor.go     # Doctor checks and model listing
 │       ├── output.go     # Terminal/JSON output helpers and fatal errors
+│       ├── probe.go      # Provider reachability probing and auto-detection
 │       ├── provider/     # Pluggable model-serving backends (one file per provider)
 │       │   ├── provider.go   # Provider interface, registry, shared probe/listing helpers
 │       │   ├── openai.go     # OpenAI-compatible hosted endpoints
@@ -105,15 +111,18 @@ See [testing.md](testing.md) for the unit, end-to-end, and live test suites and 
 
 ## Releasing
 
-Tag a commit and push to trigger the release workflow:
+Cut a release with the helper script, which bumps the version in the startup
+banner (and the test that pins it), commits the bump, tags it, and pushes both
+to the remote:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+scripts/release.sh 1.1.0
 ```
 
-This triggers the [GitHub Actions](../.github/workflows/release.yml) workflow.
-It builds binaries for macOS, Linux, and Windows and creates a GitHub Release
-with checksums. The workflow pins every action and the GoReleaser version. The
-installer aborts if the matching archive checksum is missing or invalid. GitHub
-also records build provenance for every release archive and the checksum file.
+The script refuses to run if the working tree is dirty or if the tag already
+exists. Pushing the tag triggers the [GitHub Actions](../.github/workflows/release.yml)
+workflow, which builds binaries for macOS, Linux, and Windows and creates a
+GitHub Release with checksums. The workflow pins every action and the GoReleaser
+version. The installer aborts if the matching archive checksum is missing or
+invalid. GitHub also records build provenance for every release archive and the
+checksum file.

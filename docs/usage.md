@@ -66,6 +66,13 @@ COMMIT_PILOT_MAX_SUBJECT_LENGTH=72
 COMMIT_PILOT_BODY_STYLE=short bullet list
 ```
 
+## Provider auto-detection
+
+When no provider is configured explicitly, commit-pilot probes LM Studio,
+Ollama, and Unsloth Studio in turn and auto-selects the first one that is
+running. An explicit `OPENAI_PROVIDER` or `OPENAI_BASE_URL` is always
+respected and probed on its own.
+
 ## Review the commit plan
 
 Before committing anything, Commit Pilot prints the proposed subjects and files

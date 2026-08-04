@@ -76,9 +76,11 @@ OPENAI_BASE_URL=http://localhost:8888/v1 make test-live
 ```
 
 The script sets up a temporary git repo with staged changes across docs,
-config, and code, then runs commit-pilot in dry-run mode. Results are grouped
-into titled tables such as `repo & changes` and `binary files`, with pass and
-fail totals when the run finishes. It checks for:
+config, and code, then runs commit-pilot in dry-run mode. Output streams as it
+happens: the provider probe and build report appear immediately, then a working
+spinner runs through the silent test phase. Results are grouped into titled
+tables such as `repo & changes` and `binary files`, with pass and fail totals
+when the run finishes. It checks for:
 
 - **Repo & Changes**: running outside a git repo, an empty repo, multi-file
   changes that reach the AI stage, single mode, and a mixed staged and
