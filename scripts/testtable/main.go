@@ -150,9 +150,7 @@ func categoryForTest(name string) string {
 		return "cli & args"
 	case strings.Contains(name, "Config"), strings.Contains(name, "ConfigDir"), strings.Contains(name, "ResolveConfig"), strings.Contains(name, "TmpDir"):
 		return "config"
-	case strings.Contains(name, "ContextLength"), strings.Contains(name, "QueryModelInfo"),
-		strings.Contains(name, "SearchMaxContext"), strings.Contains(name, "GetSystemRAM"),
-		strings.Contains(name, "ModelInfo"), strings.Contains(name, "ParseEstimatedMemory"),
+	case strings.Contains(name, "ContextLength"),
 		strings.Contains(name, "CanFitInContext"), strings.Contains(name, "AvailableDiffTokens"),
 		strings.Contains(name, "EstimatePromptTokens"), strings.Contains(name, "EstimateTokens"):
 		return "context window"
@@ -178,7 +176,7 @@ func categoryForTest(name string) string {
 		return "planning"
 	case strings.Contains(name, "CallLLM"), strings.Contains(name, "ResponseFormat"),
 		strings.Contains(name, "Provider"), strings.Contains(name, "Probe"),
-		strings.Contains(name, "ValidateProviderURL"), strings.Contains(name, "Unsloth"),
+		strings.Contains(name, "ValidateProviderURL"),
 		strings.Contains(name, "OpenAI"):
 		return "llm & providers"
 	case strings.Contains(name, "Prompt"), strings.Contains(name, "SectionByName"),
