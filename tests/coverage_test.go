@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -270,129 +269,14 @@ func TestLoadPromptAndSections(t *testing.T) {
 }
 
 func TestSummariesPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv(lib.TmpDirEnv, tmpDir)
+	base := t.TempDir()
+	t.Setenv(lib.EnvConfigDir, base)
 	path := lib.SummariesPath()
-	if !strings.HasPrefix(path, tmpDir) {
-		t.Fatalf("expected path %q to be inside temporary directory %q", path, tmpDir)
+	if !strings.HasPrefix(path, filepath.Join(base, "commit-pilot", "tmp")) {
+		t.Fatalf("expected path %q to be inside %q", path, filepath.Join(base, "commit-pilot", "tmp"))
 	}
 	if !strings.Contains(path, "git_diff_summaries") {
 		t.Fatal("expected path to contain git_diff_summaries")
-	}
-}
-
-func TestConfigDir(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, "/tmp/commit-pilot")
-	if got := lib.ConfigDir(); got != "/tmp/commit-pilot" {
-		t.Fatalf("ConfigDir() = %q, want environment value", got)
-	}
-}
-
-func TestConfigDirDefault(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, "")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("user home directory unavailable")
-	}
-	if got, want := lib.ConfigDir(), filepath.Join(home, ".config", "commit-pilot"); got != want {
-		t.Fatalf("ConfigDir() = %q, want %q", got, want)
-	}
-}
-
-func TestTmpDir(t *testing.T) {
-	t.Setenv(lib.TmpDirEnv, "/tmp/commit-pilot")
-	if got := lib.TmpDir(); got != "/tmp/commit-pilot" {
-		t.Fatalf("TmpDir() = %q, want environment value", got)
-	}
-}
-
-func TestTmpDirDefault(t *testing.T) {
-	t.Setenv(lib.TmpDirEnv, "")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("user home directory unavailable")
-	}
-	if got, want := lib.TmpDir(), filepath.Join(home, ".commit-pilot", "tmp"); got != want {
-		t.Fatalf("TmpDir() = %q, want %q", got, want)
-	}
-}
-
-func TestConfigDefaults(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv(lib.ConfigDirEnv, configDir)
-	content := "# local defaults\nOPENAI_PROVIDER=ollama\nOPENAI_MODEL=qwen\nOPENAI_BASE_URL=http://localhost:11434/v1\nIGNORED=value\n"
-	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(content), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	defaults := lib.ConfigDefaults()
-	if defaults["OPENAI_PROVIDER"] != "ollama" || defaults["OPENAI_MODEL"] != "qwen" {
-		t.Fatalf("unexpected config defaults: %#v", defaults)
-	}
-	if _, ok := defaults["IGNORED"]; ok {
-		t.Fatal("unsupported configuration key should be ignored")
-	}
-}
-
-func TestConfigDefaultsRejectsInvalidPreferenceValues(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv(lib.ConfigDirEnv, configDir)
-	content := "COMMIT_PILOT_CONVENTIONAL_COMMITS=perhaps\nCOMMIT_PILOT_MAX_SUBJECT_LENGTH=0\n"
-	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(content), 0600); err != nil {
-		t.Fatal(err)
-	}
-	defaults := lib.ConfigDefaults()
-	if len(defaults) != 0 {
-		t.Fatalf("invalid preferences should be ignored: %#v", defaults)
-	}
-}
-
-func TestConfigDefaultsCreatesFile(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv(lib.ConfigDirEnv, configDir)
-
-	defaults := lib.ConfigDefaults()
-	if defaults["OPENAI_PROVIDER"] != "lmstudio" {
-		t.Fatalf("expected LM Studio default, got %#v", defaults)
-	}
-	data, err := os.ReadFile(filepath.Join(configDir, "config.env"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "OPENAI_MODEL=gemma-4-e2b-it-qat") {
-		t.Fatalf("unexpected generated config: %s", data)
-	}
-}
-
-func TestProjectConfigCannotOverrideProvider(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv(lib.ConfigDirEnv, configDir)
-	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte("OPENAI_PROVIDER=openai\nOPENAI_MODEL=user-model\nOPENAI_BASE_URL=https://trusted.test/v1\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	repo := newGitRepo(t)
-	t.Chdir(repo)
-	projectDir := filepath.Join(repo, ".commit-pilot")
-	projectConfig := filepath.Join(projectDir, "config.env")
-	if err := os.MkdirAll(projectDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	projectValues := "OPENAI_PROVIDER=ollama\nOPENAI_MODEL=project-model\nOPENAI_BASE_URL=https://attacker.test/v1\nCOMMIT_PILOT_BODY_STYLE=bulleted\n"
-	if err := os.WriteFile(projectConfig, []byte(projectValues), 0600); err != nil {
-		t.Fatal(err)
-	}
-	defaults := lib.ConfigDefaults()
-	if got := defaults["OPENAI_PROVIDER"]; got != "openai" {
-		t.Fatalf("project config overrode user provider: %q", got)
-	}
-	if got := defaults["OPENAI_MODEL"]; got != "user-model" {
-		t.Fatalf("project config overrode user model: %q", got)
-	}
-	if got := defaults["OPENAI_BASE_URL"]; got != "https://trusted.test/v1" {
-		t.Fatalf("project config overrode user API base: %q", got)
-	}
-	if got := defaults["COMMIT_PILOT_BODY_STYLE"]; got != "bulleted" {
-		t.Fatalf("project preference was not applied: %q", got)
 	}
 }
 

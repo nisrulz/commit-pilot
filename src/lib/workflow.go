@@ -118,11 +118,6 @@ func runApply(cfg Config, changes *Changes) {
 // warns about oversized diffs, dispatches to single or auto mode, then checks
 // for any changes left behind and cleans up temp files on success.
 func runGenerate(cfg Config, changes *Changes, tmpl string) {
-	if cfg.AutoContextWindow {
-		if detected := DetectContextWindow(cfg.APIBase); detected > 0 {
-			cfg.ContextWindow = detected
-		}
-	}
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(changes.AllFiles), "changed file")))
 	if len(changes.BinaryFiles) > 0 && !IsQuietOutput() {
 		fmt.Printf("    (binary: %s)\n", strings.Join(sanitizePaths(changes.BinaryFiles), ", "))

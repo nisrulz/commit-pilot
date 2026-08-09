@@ -53,10 +53,7 @@ func runCLI(t *testing.T, bin, dir string, env map[string]string, stdin string, 
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"COMMIT_PILOT_CONFIG_DIR="+t.TempDir(),
-		"COMMIT_PILOT_TMP_DIR="+t.TempDir(),
-	)
+	cmd.Env = append(os.Environ(), "COMMIT_PILOT_CONFIG_DIR="+t.TempDir())
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -68,6 +65,17 @@ func runCLI(t *testing.T, bin, dir string, env map[string]string, stdin string, 
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	return stdout.String(), stderr.String(), err
+}
+
+// writeConfig writes a YAML config file to a temp path and returns it so tests
+// can point the binary at a mock provider via --config.
+func writeConfig(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 // newGitRepo creates a git repository in a temp directory with an initial

@@ -32,7 +32,7 @@ func SummariesPath() string {
 		id = []byte{0, 0, 0, 1}
 	}
 
-	dir := TmpDir()
+	dir := filepath.Join(configDir(), "tmp")
 	os.MkdirAll(dir, 0700)
 
 	return filepath.Join(dir, fmt.Sprintf("git_diff_summaries_%s_%s_%s.json", date, name, hex.EncodeToString(id)))

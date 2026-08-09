@@ -14,13 +14,10 @@ import (
 
 func TestProviderDispatch(t *testing.T) {
 	cases := map[string]string{
-		"":         "openai",
-		"unknown":  "openai",
-		"openai":   "openai",
-		"ollama":   "ollama",
-		"lmstudio": "lmstudio",
-		"unsloth":  "unsloth",
-		"custom":   "custom",
+		"":              "openai_compat",
+		"unknown":       "openai_compat",
+		"openai_compat": "openai_compat",
+		"ollama":        "ollama",
 	}
 	for name, want := range cases {
 		if got := provider.New(name).Name(); got != want {
@@ -30,19 +27,19 @@ func TestProviderDispatch(t *testing.T) {
 }
 
 func TestProviderKnownAndNames(t *testing.T) {
-	for _, name := range []string{"openai", "ollama", "lmstudio", "unsloth", "custom"} {
+	for _, name := range []string{"openai_compat", "ollama"} {
 		if !provider.Known(name) {
 			t.Fatalf("Known(%q) = false, want true", name)
 		}
 	}
-	for _, name := range []string{"", "openai-", "unslth", "lmstudio1"} {
+	for _, name := range []string{"", "openai", "openai-", "unslth", "lmstudio1", "unsloth", "custom"} {
 		if provider.Known(name) {
 			t.Fatalf("Known(%q) = true, want false", name)
 		}
 	}
 	names := provider.Names()
-	if len(names) != 5 {
-		t.Fatalf("Names() = %v, want 5 providers", names)
+	if len(names) != 2 {
+		t.Fatalf("Names() = %v, want 2 providers", names)
 	}
 	for i := 1; i < len(names); i++ {
 		if names[i] < names[i-1] {
@@ -85,7 +82,7 @@ func TestProviderProbeDrainsResponseBody(t *testing.T) {
 }
 
 func TestOpenAICompatProvidersProbeModels(t *testing.T) {
-	for _, name := range []string{"openai", "ollama", "lmstudio"} {
+	for _, name := range []string{"openai_compat", "ollama"} {
 		var gotPath string
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
@@ -121,50 +118,33 @@ func TestProviderProbeFailsWhenUnreachable(t *testing.T) {
 	url := server.URL
 	server.Close()
 
-	for _, name := range []string{"", "unsloth"} {
+	for _, name := range []string{"", "openai_compat"} {
 		if err := provider.New(name).Probe(context.Background(), url, "", nil); err == nil {
 			t.Fatalf("Probe against closed server (%s) should fail", name)
 		}
 	}
 }
 
-func TestUnslothProviderProbeUsesHealthAtRoot(t *testing.T) {
-	var gotPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	// The API base carries /v1; the health probe must land on the server root.
-	if err := provider.New("unsloth").Probe(context.Background(), server.URL+"/v1", "", nil); err != nil {
-		t.Fatalf("Probe failed: %v", err)
-	}
-	if gotPath != "/health" {
-		t.Fatalf("Probe hit %q, want /health", gotPath)
-	}
-}
-
-func TestUnslothProviderListModelsSendsKeyAndParses(t *testing.T) {
+func TestOpenAICompatProviderListModelsSendsKeyAndParses(t *testing.T) {
 	var gotPath, gotAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotAuth = r.Header.Get("Authorization")
-		_, _ = w.Write([]byte(`{"data":[{"id":"unsloth/gemma-4-E4B-it-qat-GGUF"}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"unsloth/LFM2.5-8B-A1B-GGUF"}]}`))
 	}))
 	defer server.Close()
 
-	models, err := provider.New("unsloth").ListModels(context.Background(), server.URL+"/v1", "sk-unsloth-test", nil)
+	models, err := provider.New("openai_compat").ListModels(context.Background(), server.URL+"/v1", "sk-test", nil)
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
 	}
 	if gotPath != "/v1/models" {
 		t.Fatalf("ListModels hit %q, want /v1/models", gotPath)
 	}
-	if gotAuth != "Bearer sk-unsloth-test" {
+	if gotAuth != "Bearer sk-test" {
 		t.Fatalf("auth header = %q, want Bearer key", gotAuth)
 	}
-	if len(models) != 1 || models[0] != "unsloth/gemma-4-E4B-it-qat-GGUF" {
+	if len(models) != 1 || models[0] != "unsloth/LFM2.5-8B-A1B-GGUF" {
 		t.Fatalf("models = %v", models)
 	}
 }
@@ -177,7 +157,7 @@ func TestListProviderModelsDispatchesByProvider(t *testing.T) {
 	}))
 	defer server.Close()
 
-	models, err := lib.ListProviderModels(lib.Config{APIBase: server.URL + "/v1", Provider: "unsloth"})
+	models, err := lib.ListProviderModels(lib.Config{APIBase: server.URL + "/v1", Provider: "openai_compat"})
 	if err != nil {
 		t.Fatalf("ListProviderModels: %v", err)
 	}

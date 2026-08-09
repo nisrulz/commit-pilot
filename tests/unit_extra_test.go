@@ -387,13 +387,13 @@ func TestPlanFromSummariesFallback(t *testing.T) {
 }
 
 func TestLoadPromptCustomFile(t *testing.T) {
-	// COMMIT_PILOT_PROMPT_FILE is honored in ResolveConfig.
-	path := filepath.Join(t.TempDir(), "custom.txt")
-	if err := os.WriteFile(path, []byte("custom prompt"), 0600); err != nil {
-		t.Fatal(err)
+	// The config file's prompt key is honored in ResolveConfig.
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home), "prompt: custom prompt\n")
+	cfg, err := lib.ResolveConfig(lib.RawFlags{})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
 	}
-	t.Setenv("COMMIT_PILOT_PROMPT_FILE", path)
-	cfg := lib.ResolveConfig(lib.RawFlags{})
 	if cfg.Prompt != "custom prompt" {
 		t.Fatalf("Prompt = %q, want custom prompt", cfg.Prompt)
 	}

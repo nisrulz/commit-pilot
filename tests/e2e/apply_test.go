@@ -16,7 +16,7 @@ func TestEndToEndPlanOutAndApply(t *testing.T) {
 
 	planPath := filepath.Join(t.TempDir(), "plan.json")
 	mock := newMockOpenAI(t, mockRespond)
-	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--plan-out", planPath, "--json")
+	_, stderr, err := runCLI(t, bin, repo, nil, "y\n", "--plan-out", planPath, "--json", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("plan-out run failed: %v\n%s", err, stderr)
 	}
@@ -27,7 +27,7 @@ func TestEndToEndPlanOutAndApply(t *testing.T) {
 		t.Fatalf("--plan-out should not commit, count=%d", count)
 	}
 
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--apply", planPath, "--dry-run", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--apply", planPath, "--dry-run", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("dry-run apply failed: %v\n%s", err, stderr)
 	}
@@ -40,7 +40,7 @@ func TestEndToEndPlanOutAndApply(t *testing.T) {
 	}
 
 	// Apply the saved plan.
-	stdout, stderr, err = runCLI(t, bin, repo, mockEnv(mock), "y\n", "--apply", planPath, "--json")
+	stdout, stderr, err = runCLI(t, bin, repo, nil, "y\n", "--apply", planPath, "--json", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("apply run failed: %v\n%s", err, stderr)
 	}
@@ -64,7 +64,7 @@ func TestEndToEndSingleModeWritesPlan(t *testing.T) {
 
 	planPath := filepath.Join(t.TempDir(), "plan.json")
 	mock := newMockOpenAI(t, mockRespond)
-	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--single", "--plan-out", planPath, "--json")
+	_, stderr, err := runCLI(t, bin, repo, nil, "", "--single", "--plan-out", planPath, "--json", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("single plan-out run failed: %v\n%s", err, stderr)
 	}
@@ -100,7 +100,7 @@ func TestEndToEndApplyBinaryOnlyPlan(t *testing.T) {
 	}
 
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--apply", planPath, "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "y\n", "--apply", planPath, "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("apply run failed: %v\n%s", err, stderr)
 	}
@@ -128,7 +128,7 @@ func TestEndToEndCommitsBinaryOnlyChangesWithoutModel(t *testing.T) {
 	}
 
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("binary-only run failed: %v\n%s", err, stderr)
 	}
@@ -158,7 +158,7 @@ func TestEndToEndPlanLint(t *testing.T) {
 		t.Fatal(err)
 	}
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, _, err := runCLI(t, bin, repo, mockEnv(mock), "", "--plan-lint", planPath, "--json")
+	stdout, _, err := runCLI(t, bin, repo, nil, "", "--plan-lint", planPath, "--json", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("plan-lint failed: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestEndToEndApplyInvalidPlanFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, _, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--apply", planPath, "--json")
+	stdout, _, err := runCLI(t, bin, repo, nil, "y\n", "--apply", planPath, "--json", "--config", mockConfig(t, mock))
 	if err == nil {
 		t.Fatal("expected failure for invalid plan")
 	}

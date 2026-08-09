@@ -5,13 +5,11 @@ import (
 	"testing"
 )
 
-// mockEnv returns the provider environment pointing at the mock server.
-func mockEnv(mock *mockOpenAI) map[string]string {
-	return map[string]string{
-		"OPENAI_BASE_URL": mock.url(),
-		"OPENAI_PROVIDER": "openai",
-		"OPENAI_MODEL":    "test-model",
-	}
+// mockConfig writes a YAML config file pointing at the mock provider and
+// returns its path to pass via --config.
+func mockConfig(t *testing.T, mock *mockOpenAI) string {
+	t.Helper()
+	return writeConfig(t, "provider: openai_compat\nmodel: test-model\nbase_url: "+mock.url()+"\n")
 }
 
 func TestEndToEndAutoModeCommits(t *testing.T) {
@@ -23,7 +21,7 @@ func TestEndToEndAutoModeCommits(t *testing.T) {
 	runGit(t, repo, "add", "-A")
 
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "y\n", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
@@ -54,7 +52,7 @@ func TestEndToEndSingleModeOneCommit(t *testing.T) {
 	runGit(t, repo, "add", "-A")
 
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, _, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--json", "--yes", "--single")
+	stdout, _, err := runCLI(t, bin, repo, nil, "y\n", "--json", "--yes", "--single", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
@@ -85,7 +83,7 @@ func TestEndToEndDryRunCreatesNoCommits(t *testing.T) {
 	runGit(t, repo, "add", "-A")
 
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--dry-run")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--dry-run", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
 	}
@@ -115,7 +113,7 @@ func TestEndToEndDeclinedConfirmation(t *testing.T) {
 	runGit(t, repo, "add", "-A")
 
 	mock := newMockOpenAI(t, mockRespond)
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "n\n", "--json", "--single")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "n\n", "--json", "--single", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, stderr)
 	}

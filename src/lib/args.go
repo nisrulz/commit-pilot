@@ -1,6 +1,9 @@
 package lib
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // RawFlags holds the command-line flags parsed from the process arguments.
 type RawFlags struct {
@@ -14,6 +17,7 @@ type RawFlags struct {
 	Quiet            bool
 	Staged           bool
 	Unstaged         bool
+	ConfigPath       string
 	PlanOut          string
 	Apply            string
 	PlanLint         string
@@ -29,28 +33,38 @@ func ParseArgs(args []string) (RawFlags, bool) {
 	var f RawFlags
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		switch a {
-		case "--dry-run", "--no-commit":
+		switch {
+		case a == "--dry-run" || a == "--no-commit":
 			f.DryRun = true
-		case "--cleanup":
+		case a == "--cleanup":
 			f.Cleanup = true
-		case "--single":
+		case a == "--single":
 			f.Mode = "1"
-		case "--yes":
+		case a == "--yes":
 			f.Yes = true
-		case "--doctor":
+		case a == "--doctor":
 			f.Doctor = true
-		case "--list-models":
+		case a == "--list-models":
 			f.ListModels = true
-		case "--json":
+		case a == "--json":
 			f.JSON = true
-		case "--quiet":
+		case a == "--quiet":
 			f.Quiet = true
-		case "--staged":
+		case a == "--staged":
 			f.Staged = true
-		case "--unstaged":
+		case a == "--unstaged":
 			f.Unstaged = true
-		case "--plan-out":
+		case a == "--config":
+			if i+1 < len(args) && args[i+1] != "" {
+				i++
+				f.ConfigPath = args[i]
+			} else {
+				f.Error = "--config requires a path"
+				return f, false
+			}
+		case strings.HasPrefix(a, "--config="):
+			f.ConfigPath = strings.TrimPrefix(a, "--config=")
+		case a == "--plan-out":
 			if i+1 < len(args) && args[i+1] != "" {
 				i++
 				f.PlanOut = args[i]
@@ -58,7 +72,7 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				f.Error = "--plan-out requires a path"
 				return f, false
 			}
-		case "--apply":
+		case a == "--apply":
 			if i+1 < len(args) && args[i+1] != "" {
 				i++
 				f.Apply = args[i]
@@ -66,7 +80,7 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				f.Error = "--apply requires a path"
 				return f, false
 			}
-		case "--plan-lint":
+		case a == "--plan-lint":
 			if i+1 < len(args) && args[i+1] != "" {
 				i++
 				f.PlanLint = args[i]
@@ -74,7 +88,7 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				f.Error = "--plan-lint requires a path"
 				return f, false
 			}
-		case "--include":
+		case a == "--include":
 			if i+1 < len(args) && args[i+1] != "" {
 				i++
 				f.Include = append(f.Include, args[i])
@@ -82,7 +96,7 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				f.Error = "--include requires a glob"
 				return f, false
 			}
-		case "--exclude":
+		case a == "--exclude":
 			if i+1 < len(args) && args[i+1] != "" {
 				i++
 				f.Exclude = append(f.Exclude, args[i])
@@ -90,10 +104,13 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				f.Error = "--exclude requires a glob"
 				return f, false
 			}
-		case "--include-sensitive":
+		case a == "--include-sensitive":
 			f.IncludeSensitive = true
-		case "-h", "--help":
+		case a == "-h" || a == "--help":
 			return f, true
+		case a == "config":
+			f.Error = "the \"config\" command no longer exists; edit the config file directly (see --help)"
+			return f, false
 		default:
 			f.Error = fmt.Sprintf("unknown argument %q", a)
 			return f, false

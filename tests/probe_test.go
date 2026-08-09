@@ -50,59 +50,36 @@ func TestAnnounceProviderNamedProviderRespected(t *testing.T) {
 	}
 }
 
-func TestAnnounceProviderIdentifiesProviderAtConfiguredBase(t *testing.T) {
+func TestAnnounceProviderIdentifiesOpenAICompatAtConfiguredBase(t *testing.T) {
 	defer quiet()()
-	// A customized endpoint (127.0.0.1 vs localhost) with the default provider
-	// must be identified by probing: Unsloth answers /health, so it wins over
-	// the /models-only fallback even though it was not configured by name.
+	// A customized endpoint with no named provider is probed as an
+	// OpenAI-compatible server.
 	cfg := lib.Config{
-		Provider:        "lmstudio",
 		APIBase:         "http://127.0.0.1:8888/v1",
-		Model:           "unsloth/gemma-4-E4B-it-qat-GGUF",
+		Model:           "test-model",
 		APIBaseExplicit: true,
 		HTTPClient: urlAwareDoer{reachable: map[string]bool{
-			"http://127.0.0.1:8888/health":    true,
 			"http://127.0.0.1:8888/v1/models": true,
 		}},
 	}
 	got := lib.AnnounceProvider(cfg)
-	if got.Provider != "unsloth" || got.APIBase != "http://127.0.0.1:8888/v1" {
-		t.Fatalf("expected unsloth identified at configured base, got %s @ %s", got.Provider, got.APIBase)
+	if got.Provider != "openai_compat" || got.APIBase != "http://127.0.0.1:8888/v1" {
+		t.Fatalf("expected openai_compat at configured base, got %s @ %s", got.Provider, got.APIBase)
 	}
 }
 
-func TestAnnounceProviderFallsBackToDefaultProviderAtUnknownBase(t *testing.T) {
+func TestAnnounceProviderAutoDetectsReachableOllama(t *testing.T) {
 	defer quiet()()
-	// A custom endpoint with no /health route falls back to the /models-style
-	// providers, landing on the default name.
+	// With no explicit provider, the default Ollama endpoint is probed.
 	cfg := lib.Config{
-		Provider:        "lmstudio",
-		APIBase:         "http://localhost:9999/v1",
-		Model:           "test-model",
-		APIBaseExplicit: true,
-		HTTPClient: urlAwareDoer{reachable: map[string]bool{
-			"http://localhost:9999/v1/models": true,
-		}},
+		Model:      "lfm2.5:8b",
+		HTTPClient: urlAwareDoer{reachable: map[string]bool{"http://localhost:11434/v1/models": true}},
 	}
 	got := lib.AnnounceProvider(cfg)
-	if got.Provider != "lmstudio" || got.APIBase != "http://localhost:9999/v1" {
-		t.Fatalf("expected fallback provider at unknown base, got %s @ %s", got.Provider, got.APIBase)
+	if got.Provider != "ollama" || got.APIBase != "http://localhost:11434/v1" {
+		t.Fatalf("expected ollama to be detected, got %s @ %s", got.Provider, got.APIBase)
 	}
-}
-
-func TestAnnounceProviderAutoDetectsReachableLocalProvider(t *testing.T) {
-	defer quiet()()
-	// Only Unsloth's health route answers, so it must be picked over the
-	// earlier lmstudio and ollama candidates.
-	cfg := lib.Config{
-		Model:      "gemma-4-e2b-it-qat",
-		HTTPClient: urlAwareDoer{reachable: map[string]bool{"http://localhost:8888/health": true}},
-	}
-	got := lib.AnnounceProvider(cfg)
-	if got.Provider != "unsloth" || got.APIBase != "http://localhost:8888/v1" {
-		t.Fatalf("expected unsloth to be detected, got %s @ %s", got.Provider, got.APIBase)
-	}
-	if got.Model != "gemma-4-e2b-it-qat" {
+	if got.Model != "lfm2.5:8b" {
 		t.Fatalf("configured model must be kept, got %q", got.Model)
 	}
 }
@@ -110,8 +87,8 @@ func TestAnnounceProviderAutoDetectsReachableLocalProvider(t *testing.T) {
 func TestAnnounceProviderKeepsConfigWhenNothingReachable(t *testing.T) {
 	defer quiet()()
 	cfg := lib.Config{
-		Provider:   "lmstudio",
-		APIBase:    "http://localhost:1234/v1",
+		Provider:   "ollama",
+		APIBase:    "http://localhost:11434/v1",
 		Model:      "test-model",
 		HTTPClient: urlAwareDoer{reachable: map[string]bool{}},
 	}
@@ -121,39 +98,20 @@ func TestAnnounceProviderKeepsConfigWhenNothingReachable(t *testing.T) {
 	}
 }
 
-func TestAnnounceProviderPrefersModelMatchingProvider(t *testing.T) {
-	defer quiet()()
-	// The configured model is Unsloth's default, so Unsloth must win even when
-	// LM Studio is also reachable and would otherwise come first.
-	cfg := lib.Config{
-		Model: "unsloth/gemma-4-E4B-it-qat-GGUF",
-		HTTPClient: urlAwareDoer{reachable: map[string]bool{
-			"http://localhost:1234/v1/models": true,
-			"http://localhost:8888/health":    true,
-		}},
-	}
-	got := lib.AnnounceProvider(cfg)
-	if got.Provider != "unsloth" || got.APIBase != "http://localhost:8888/v1" {
-		t.Fatalf("expected model-matching unsloth to be selected, got %s @ %s", got.Provider, got.APIBase)
-	}
-}
-
 func TestAnnounceProviderPrintsProbeTable(t *testing.T) {
 	lib.SetOutputMode(false, false)
 	defer lib.SetOutputMode(false, false)
 	cfg := lib.Config{
-		Model:      "gemma-4-e2b-it-qat",
-		HTTPClient: urlAwareDoer{reachable: map[string]bool{"http://localhost:8888/health": true}},
+		Model:      "lfm2.5:8b",
+		HTTPClient: urlAwareDoer{reachable: map[string]bool{"http://localhost:11434/v1/models": true}},
 	}
 	out := captureStdout(t, func() { lib.AnnounceProvider(cfg) })
 	for _, want := range []string{
 		"Probing available AI providers",
-		"lmstudio",
-		"http://localhost:1234/v1/models",
-		"unsloth",
-		"http://localhost:8888/health",
-		"Using provider: unsloth (http://localhost:8888/v1)",
-		"-> Model: gemma-4-e2b-it-qat",
+		"ollama",
+		"http://localhost:11434/v1/models",
+		"Using provider: ollama (http://localhost:11434/v1)",
+		"-> Model: lfm2.5:8b",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("probe table missing %q:\n%s", want, out)

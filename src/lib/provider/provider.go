@@ -27,8 +27,8 @@ const MaxResponseSize = 1 << 20
 // Provider is a pluggable model-serving backend. Each implementation knows how
 // to verify its own health and list the models it exposes.
 type Provider interface {
-	// Name is the provider identifier used in OPENAI_PROVIDER and the
-	// KnownProviders map.
+	// Name is the provider identifier used in the config file's provider key
+	// and the KnownProviders map.
 	Name() string
 
 	// Probe verifies the provider at base is running. It must not depend on a
@@ -54,7 +54,7 @@ func New(name string) Provider {
 	if p, ok := registeredProviders[name]; ok {
 		return p
 	}
-	return openAIProvider{}
+	return openaiCompatProvider{}
 }
 
 // Known reports whether name identifies a registered provider. The empty name

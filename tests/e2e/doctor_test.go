@@ -12,7 +12,7 @@ func TestEndToEndListModelsAndDoctor(t *testing.T) {
 	repo := newGitRepo(t)
 	mock := newMockOpenAI(t, mockRespond)
 
-	stdout, _, err := runCLI(t, bin, repo, mockEnv(mock), "", "--list-models", "--json")
+	stdout, _, err := runCLI(t, bin, repo, nil, "", "--list-models", "--json", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("list-models failed: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestEndToEndListModelsAndDoctor(t *testing.T) {
 		t.Fatalf("unexpected models: %v", models.Models)
 	}
 
-	stdout, _, err = runCLI(t, bin, repo, mockEnv(mock), "", "--doctor", "--json")
+	stdout, _, err = runCLI(t, bin, repo, nil, "", "--doctor", "--json", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
@@ -55,11 +55,8 @@ func TestEndToEndProviderFailureJSONError(t *testing.T) {
 	deadURL := dead.URL
 	dead.Close()
 
-	stdout, stderr, err := runCLI(t, bin, repo, map[string]string{
-		"OPENAI_BASE_URL": deadURL,
-		"OPENAI_PROVIDER": "openai",
-		"OPENAI_MODEL":    "test-model",
-	}, "", "--json", "--single")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--single", "--config",
+		writeConfig(t, "provider: openai_compat\nmodel: test-model\nbase_url: "+deadURL+"\n"))
 	if err == nil {
 		t.Fatal("expected failure against dead provider")
 	}

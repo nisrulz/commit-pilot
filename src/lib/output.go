@@ -72,7 +72,7 @@ func PrintContextError(err *ContextLengthError) {
 	fmt.Fprintf(os.Stderr, "    Context window:   %s tokens\n", FormatNumber(err.Available))
 	fmt.Println()
 	fmt.Fprintf(os.Stderr, "  %s To fix this, you can:\n", yellow("SUGGESTIONS:"))
-	fmt.Fprintf(os.Stderr, "    1. Increase context window: export COMMIT_PILOT_CONTEXT_WINDOW=131072\n")
+	fmt.Fprintf(os.Stderr, "    1. Increase context_window in your config file\n")
 	fmt.Fprintf(os.Stderr, "    2. Stage fewer files at once\n")
 	fmt.Fprintf(os.Stderr, "    3. Use a model with larger context window\n")
 }

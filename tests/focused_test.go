@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -202,80 +201,21 @@ func TestPlanFromSummariesEmptyGroups(t *testing.T) {
 	}
 }
 
-// --- Context window helpers ---
+// --- ResolveConfig coverage ---
 
-func TestQueryModelInfo(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"models":[{"key":"gemma","max_context_length":32768}]}`))
-	}))
-	defer server.Close()
-	mi, err := lib.QueryModelInfo(server.URL)
+func TestResolveConfigFileSettings(t *testing.T) {
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home),
+		"provider: openai_compat\nmodel: custom-model\nbase_url: https://custom.test/v1\n"+
+			"context_window: 16000\nretries: 5\ntimeout_seconds: 42\n"+
+			"max_subject_length: 72\nticket_prefix: \"PLAT-\"\nbody_style: bulleted\n"+
+			"conventional: false\nimperative: false\n")
+	t.Setenv(lib.EnvAPIKey, "sk-test")
+
+	cfg, err := lib.ResolveConfig(lib.RawFlags{})
 	if err != nil {
-		t.Fatalf("QueryModelInfo: %v", err)
+		t.Fatalf("resolve: %v", err)
 	}
-	if mi.Key != "gemma" || mi.MaxContextLength != 32768 {
-		t.Fatalf("unexpected model info: %+v", mi)
-	}
-}
-
-func TestQueryModelInfoServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer server.Close()
-	if _, err := lib.QueryModelInfo(server.URL); err == nil {
-		t.Fatal("expected error for server 500")
-	}
-}
-
-func TestQueryModelInfoNoModel(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"models":[]}`))
-	}))
-	defer server.Close()
-	if _, err := lib.QueryModelInfo(server.URL); err == nil {
-		t.Fatal("expected error when provider has no models")
-	}
-}
-
-func TestSearchMaxContextWithoutLMS(t *testing.T) {
-	if _, err := exec.LookPath("lms"); err == nil {
-		t.Skip("lms is installed; memory estimates are environment-dependent")
-	}
-	got := lib.SearchMaxContext(1<<30, &lib.ModelInfo{Key: "model", MaxContextLength: 8192})
-	if got != 8192 {
-		t.Fatalf("SearchMaxContext = %d, want 8192 when estimates are unavailable", got)
-	}
-}
-
-func TestGetSystemRAMDetectable(t *testing.T) {
-	ram, err := lib.GetSystemRAM()
-	if err != nil {
-		t.Skipf("cannot detect system RAM: %v", err)
-	}
-	if ram <= 0 {
-		t.Fatalf("expected positive system RAM, got %d", ram)
-	}
-}
-
-// --- ResolveConfig branch coverage ---
-
-func TestResolveConfigEnvOverrides(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, t.TempDir())
-	t.Setenv("OPENAI_PROVIDER", "openai")
-	t.Setenv("OPENAI_MODEL", "custom-model")
-	t.Setenv("OPENAI_BASE_URL", "https://custom.test/v1")
-	t.Setenv("OPENAI_API_KEY", "sk-test")
-	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16000")
-	t.Setenv("COMMIT_PILOT_RETRIES", "5")
-	t.Setenv("COMMIT_PILOT_TIMEOUT_SECONDS", "42")
-	t.Setenv("COMMIT_PILOT_MAX_SUBJECT_LENGTH", "72")
-	t.Setenv("COMMIT_PILOT_TICKET_PREFIX", "PLAT-")
-	t.Setenv("COMMIT_PILOT_BODY_STYLE", "bulleted")
-	t.Setenv("COMMIT_PILOT_CONVENTIONAL_COMMITS", "false")
-	t.Setenv("COMMIT_PILOT_IMPERATIVE_TONE", "false")
-
-	cfg := lib.ResolveConfig(lib.RawFlags{})
 	if cfg.Model != "custom-model" || cfg.APIBase != "https://custom.test/v1" || cfg.APIKey != "sk-test" {
 		t.Fatalf("unexpected provider settings: %+v", cfg)
 	}
@@ -294,15 +234,14 @@ func TestResolveConfigEnvOverrides(t *testing.T) {
 }
 
 func TestResolveConfigProviderDefaults(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, t.TempDir())
-	t.Setenv("OPENAI_PROVIDER", "ollama")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("OPENAI_BASE_URL", "")
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home), "provider: ollama\n")
 
-	cfg := lib.ResolveConfig(lib.RawFlags{})
-	if cfg.Model != "gemma4:e2b-it-qat" {
+	cfg, err := lib.ResolveConfig(lib.RawFlags{})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if cfg.Model != "lfm2.5:8b" {
 		t.Fatalf("expected Ollama default model, got %q", cfg.Model)
 	}
 	if cfg.APIBase != "http://localhost:11434/v1" {
@@ -310,63 +249,29 @@ func TestResolveConfigProviderDefaults(t *testing.T) {
 	}
 }
 
-func TestResolveConfigDefersContextDetection(t *testing.T) {
-	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		_, _ = w.Write([]byte(`{"models":[{"key":"test","max_context_length":32768}]}`))
-	}))
-	defer server.Close()
-
-	configDir := t.TempDir()
-	t.Setenv(lib.ConfigDirEnv, configDir)
-	contents := "OPENAI_PROVIDER=lmstudio\nOPENAI_MODEL=test\nOPENAI_BASE_URL=" + server.URL + "\n"
-	if err := os.WriteFile(filepath.Join(configDir, "config.env"), []byte(contents), 0600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("OPENAI_PROVIDER", "lmstudio")
-	t.Setenv("OPENAI_MODEL", "test")
-	t.Setenv("OPENAI_BASE_URL", server.URL)
-	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "")
-
-	cfg := lib.ResolveConfig(lib.RawFlags{})
-	if calls != 0 {
-		t.Fatalf("ResolveConfig contacted the provider %d times", calls)
-	}
-	if !cfg.AutoContextWindow {
-		t.Fatal("LM Studio should defer automatic context detection until generation")
-	}
-}
-
 func TestResolveConfigUnknownProviderRejected(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, t.TempDir())
-	t.Setenv("OPENAI_PROVIDER", "nonsense")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("OPENAI_BASE_URL", "")
-	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home), "provider: nonsense\n")
 
-	cfg := lib.ResolveConfig(lib.RawFlags{})
-	if cfg.ResolveError == "" {
+	_, err := lib.ResolveConfig(lib.RawFlags{})
+	if err == nil {
 		t.Fatal("expected a resolve error for an unknown provider")
 	}
-	if !strings.Contains(cfg.ResolveError, "unknown provider \"nonsense\"") {
-		t.Fatalf("resolve error = %q", cfg.ResolveError)
+	if !strings.Contains(err.Error(), "unknown provider \"nonsense\"") {
+		t.Fatalf("resolve error = %q", err)
 	}
 }
 
 func TestResolveConfigCustomProviderRequiresBase(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, t.TempDir())
-	t.Setenv("OPENAI_PROVIDER", "custom")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:9999/v1")
-	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\nbase_url: http://127.0.0.1:9999/v1\n")
 
-	cfg := lib.ResolveConfig(lib.RawFlags{})
-	if cfg.ResolveError != "" {
-		t.Fatalf("unexpected resolve error: %q", cfg.ResolveError)
+	cfg, err := lib.ResolveConfig(lib.RawFlags{})
+	if err != nil {
+		t.Fatalf("unexpected resolve error: %v", err)
 	}
-	if cfg.Provider != "custom" {
-		t.Fatalf("Provider = %q, want custom", cfg.Provider)
+	if cfg.Provider != "openai_compat" {
+		t.Fatalf("Provider = %q, want openai_compat", cfg.Provider)
 	}
 	if cfg.APIBase != "http://127.0.0.1:9999/v1" {
 		t.Fatalf("APIBase = %q, want custom base", cfg.APIBase)
@@ -377,28 +282,25 @@ func TestResolveConfigCustomProviderRequiresBase(t *testing.T) {
 }
 
 func TestResolveConfigCustomProviderRejectsMissingBase(t *testing.T) {
-	t.Setenv(lib.ConfigDirEnv, t.TempDir())
-	t.Setenv("OPENAI_PROVIDER", "custom")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("OPENAI_BASE_URL", "")
-	t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\n")
 
-	cfg := lib.ResolveConfig(lib.RawFlags{})
-	if cfg.ResolveError == "" || !strings.Contains(cfg.ResolveError, "requires OPENAI_BASE_URL") {
-		t.Fatalf("expected missing-base error, got %q", cfg.ResolveError)
+	_, err := lib.ResolveConfig(lib.RawFlags{})
+	if err == nil || !strings.Contains(err.Error(), "requires base_url") {
+		t.Fatalf("expected missing-base error, got %v", err)
 	}
 }
 
 func TestResolveConfigKnownProviderNoError(t *testing.T) {
-	for _, name := range []string{"openai", "ollama", "lmstudio", "unsloth"} {
-		t.Setenv(lib.ConfigDirEnv, t.TempDir())
-		t.Setenv("OPENAI_PROVIDER", name)
-		t.Setenv("OPENAI_MODEL", "")
-		t.Setenv("OPENAI_BASE_URL", "")
-		t.Setenv("COMMIT_PILOT_CONTEXT_WINDOW", "16384")
-
-		if cfg := lib.ResolveConfig(lib.RawFlags{}); cfg.ResolveError != "" {
-			t.Fatalf("provider %q: unexpected resolve error %q", name, cfg.ResolveError)
+	for _, name := range []string{"ollama", "openai_compat"} {
+		home := isolatedHome(t)
+		content := "provider: " + name + "\n"
+		if name == "openai_compat" {
+			content += "base_url: http://127.0.0.1:9999/v1\n"
+		}
+		writeConfigFile(t, defaultPath(home), content)
+		if _, err := lib.ResolveConfig(lib.RawFlags{}); err != nil {
+			t.Fatalf("provider %q: unexpected resolve error %v", name, err)
 		}
 	}
 }

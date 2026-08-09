@@ -61,7 +61,7 @@ func TestEndToEndRepairsTruncatedPlan(t *testing.T) {
 	mock := newMockOpenAI(t, resilientRespond(func(prompt string) string {
 		return `[{"subject":"feat: update files","description":"updated files","files":["a.go"]`
 	}))
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
 	}
@@ -93,7 +93,7 @@ func TestEndToEndRetriesPlanWithoutJSON(t *testing.T) {
 		}
 		return "I looked at the files but I will not output JSON."
 	}))
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
 	}
@@ -124,7 +124,7 @@ func TestEndToEndFallsBackWhenResponseFormatRejected(t *testing.T) {
 		}
 		return 200
 	}
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
 	}
@@ -163,7 +163,7 @@ func TestEndToEndRetriesTruncatedPlan(t *testing.T) {
 		}
 		return "stop"
 	}
-	stdout, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--json", "--yes")
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
 	}

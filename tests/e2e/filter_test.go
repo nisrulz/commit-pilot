@@ -13,7 +13,7 @@ func TestEndToEndSensitiveFilesNeverReachModel(t *testing.T) {
 	runGit(t, repo, "add", "-A")
 
 	mock := newMockOpenAI(t, mockRespond)
-	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--json", "--yes", "--single")
+	_, stderr, err := runCLI(t, bin, repo, nil, "y\n", "--json", "--yes", "--single", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, stderr)
 	}
@@ -46,7 +46,7 @@ func TestEndToEndStagedScope(t *testing.T) {
 	runGit(t, repo, "add", "staged.txt")
 
 	mock := newMockOpenAI(t, mockRespond)
-	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "y\n", "--json", "--yes", "--single", "--staged")
+	_, stderr, err := runCLI(t, bin, repo, nil, "y\n", "--json", "--yes", "--single", "--staged", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, stderr)
 	}
@@ -73,7 +73,7 @@ func TestEndToEndRejectsPartiallyStagedFile(t *testing.T) {
 			writeFile(t, repo, "partial.txt", "ONE\nTWO\n")
 
 			mock := newMockOpenAI(t, mockRespond)
-			_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--single", "--yes", scope)
+			_, stderr, err := runCLI(t, bin, repo, nil, "", "--single", "--yes", scope, "--config", mockConfig(t, mock))
 			if err == nil {
 				t.Fatal("partially staged file should be rejected")
 			}
@@ -97,7 +97,7 @@ func TestEndToEndTreatsGitOptionFilenameLiterally(t *testing.T) {
 	writeFile(t, repo, ".env", "SECRET=value\n")
 
 	mock := newMockOpenAI(t, mockRespond)
-	_, stderr, err := runCLI(t, bin, repo, mockEnv(mock), "", "--single", "--yes")
+	_, stderr, err := runCLI(t, bin, repo, nil, "", "--single", "--yes", "--config", mockConfig(t, mock))
 	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, stderr)
 	}

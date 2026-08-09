@@ -21,9 +21,9 @@ func Main() {
 		Die("arguments: %s", flags.Error)
 	}
 
-	cfg := ResolveConfig(flags)
-	if cfg.ResolveError != "" {
-		Die("config: %s", cfg.ResolveError)
+	cfg, err := ResolveConfig(flags)
+	if err != nil {
+		Die("config: %v", err)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
