@@ -3,3 +3,8 @@ commit-pilot
 .temp-test/
 .trash/
 *.out
+dist/
+*.test
+.env
+.idea/
+.vscode/

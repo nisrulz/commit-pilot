@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-MODEL="gemma4:e2b-it-qat"
+MODEL="lfm2.5:8b"
 
 if ! command -v ollama &>/dev/null; then
   if command -v brew &>/dev/null; then

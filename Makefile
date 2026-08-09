@@ -1,7 +1,7 @@
 .PHONY: help build install uninstall clean setup setup-lmstudio setup-ollama vet test test-cover test-live
 
 BINARY := commit-pilot
-PROVIDER ?= lmstudio
+PROVIDER ?= ollama
 
 help:
 	@echo "Usage: make <target>"

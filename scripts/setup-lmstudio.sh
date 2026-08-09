@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-MODEL="gemma-4-e2b-it-qat"
+MODEL="LiquidAI/LFM2.5-8B-A1B-GGUF"
 
 if ! command -v lms &>/dev/null; then
   if command -v brew &>/dev/null; then
