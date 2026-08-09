@@ -3,7 +3,7 @@
 `openai_compat` targets any server that exposes an OpenAI-compatible
 `/chat/completions` and `/models` API. That includes hosted endpoints such as
 OpenAI and local servers such as [LM Studio](lmstudio.md) and
-[Unsloth Studio](unsloth.md). It requires a `base_url`.
+[Unsloth Studio](unsloth.md). The default `base_url` points at Ollama.
 
 ## Configure commit-pilot
 

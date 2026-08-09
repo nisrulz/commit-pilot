@@ -72,8 +72,7 @@ commit-pilot/
 │       ├── probe.go      # Provider reachability probing
 │       ├── provider/     # Pluggable model-serving backends (one file per provider)
 │       │   ├── provider.go       # Provider interface, registry, shared probe/listing helpers
-│       │   ├── openai_compat.go  # OpenAI-compatible endpoints (hosted or local)
-│       │   └── ollama.go         # Ollama local API
+│       │   └── openai_compat.go  # OpenAI-compatible endpoints (hosted or local)
 │       └── prompt.txt    # Default prompt templates (embedded)
 ├── tests/
 │   ├── *_test.go           # Unit tests (package lib_test)

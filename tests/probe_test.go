@@ -38,14 +38,14 @@ func TestAnnounceProviderNamedProviderRespected(t *testing.T) {
 	defer server.Close()
 
 	cfg := lib.Config{
-		Provider:         "ollama",
+		Provider:         "openai_compat",
 		APIBase:          server.URL,
 		Model:            "test-model",
 		ProviderExplicit: true,
 		HTTPClient:       server.Client(),
 	}
 	got := lib.AnnounceProvider(cfg)
-	if got.Provider != "ollama" || got.APIBase != server.URL || got.Model != "test-model" {
+	if got.Provider != "openai_compat" || got.APIBase != server.URL || got.Model != "test-model" {
 		t.Fatalf("named provider must be preserved, got %s @ %s model %s", got.Provider, got.APIBase, got.Model)
 	}
 }
@@ -68,7 +68,7 @@ func TestAnnounceProviderIdentifiesOpenAICompatAtConfiguredBase(t *testing.T) {
 	}
 }
 
-func TestAnnounceProviderAutoDetectsReachableOllama(t *testing.T) {
+func TestAnnounceProviderUsesOllamaDefaultEndpoint(t *testing.T) {
 	defer quiet()()
 	// With no explicit provider, the default Ollama endpoint is probed.
 	cfg := lib.Config{
@@ -76,8 +76,8 @@ func TestAnnounceProviderAutoDetectsReachableOllama(t *testing.T) {
 		HTTPClient: urlAwareDoer{reachable: map[string]bool{"http://localhost:11434/v1/models": true}},
 	}
 	got := lib.AnnounceProvider(cfg)
-	if got.Provider != "ollama" || got.APIBase != "http://localhost:11434/v1" {
-		t.Fatalf("expected ollama to be detected, got %s @ %s", got.Provider, got.APIBase)
+	if got.Provider != "openai_compat" || got.APIBase != "http://localhost:11434/v1" {
+		t.Fatalf("expected openai_compat at the Ollama endpoint, got %s @ %s", got.Provider, got.APIBase)
 	}
 	if got.Model != "lfm2.5:8b" {
 		t.Fatalf("configured model must be kept, got %q", got.Model)
@@ -87,7 +87,7 @@ func TestAnnounceProviderAutoDetectsReachableOllama(t *testing.T) {
 func TestAnnounceProviderKeepsConfigWhenNothingReachable(t *testing.T) {
 	defer quiet()()
 	cfg := lib.Config{
-		Provider:   "ollama",
+		Provider:   "openai_compat",
 		APIBase:    "http://localhost:11434/v1",
 		Model:      "test-model",
 		HTTPClient: urlAwareDoer{reachable: map[string]bool{}},
@@ -108,9 +108,9 @@ func TestAnnounceProviderPrintsProbeTable(t *testing.T) {
 	out := captureStdout(t, func() { lib.AnnounceProvider(cfg) })
 	for _, want := range []string{
 		"Probing available AI providers",
-		"ollama",
+		"openai_compat",
 		"http://localhost:11434/v1/models",
-		"Using provider: ollama (http://localhost:11434/v1)",
+		"Using provider: openai_compat (http://localhost:11434/v1)",
 		"-> Model: lfm2.5:8b",
 	} {
 		if !strings.Contains(out, want) {

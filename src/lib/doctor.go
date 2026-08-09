@@ -68,7 +68,11 @@ func RunDoctor(cfg Config) bool {
 	fmt.Printf("  %s Model: %s\n", green("✔"), sanitizeLine(cfg.Model, 1024))
 	fmt.Printf("    API base: %s\n", sanitizeLine(cfg.APIBase, 2048))
 	fmt.Printf("    API key: %s\n", keyStatus)
-	fmt.Printf("    Config: %s\n", sanitizePath(filepath.Join(configDir(), DefaultConfigFile)))
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(configDir(), DefaultConfigFile)
+	}
+	fmt.Printf("    Config: %s\n", sanitizePath(configPath))
 
 	if err := provider.New(cfg.Provider).Probe(runContext(cfg), cfg.APIBase, cfg.APIKey, cfg.HTTPClient); err != nil {
 		fmt.Printf("  %s Provider: %v\n", red("!"), err)

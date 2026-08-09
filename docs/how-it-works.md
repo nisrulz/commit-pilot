@@ -10,12 +10,11 @@
 
 ## Provider selection
 
-Ollama is the default provider (`lfm2.5:8b`). With no explicit provider, the
-default Ollama server is probed at its default endpoint and selected when it
-answers. A named `provider` or a customized `base_url` in the config file is
-always respected and probed on its own. `openai_compat` points at any
-OpenAI-compatible server. If nothing is reachable the run continues with the
-configured provider so the provider's own error surfaces at the API call.
+The only provider is `openai_compat`. With no explicit provider, the default
+Ollama endpoint is probed with model `lfm2.5:8b`. A named `provider` or a
+customized `base_url` in the config file is always respected and probed on its
+own. If nothing is reachable the run continues with the configured provider so
+the provider's own error surfaces at the API call.
 
 ## Auto-chunk mode (default)
 
@@ -132,10 +131,10 @@ The tool has no telemetry. Selected diffs still go to the configured provider,
 so use Ollama or another local OpenAI-compatible server when the code must stay
 on your machine.
 
-The `provider` config key accepts `ollama` and `openai_compat`. An unknown
-provider name aborts before anything runs, so a typo can never silently fall
-back to a different endpoint. `openai_compat` targets an OpenAI-compatible API
-without a dedicated backend and requires a `base_url`.
+The `provider` config key accepts only `openai_compat`. An unknown provider name
+aborts before anything runs, so a typo can never silently fall back to a
+different endpoint. The default base URL points at Ollama, which also exposes
+an OpenAI-compatible API.
 
 ## Output
 

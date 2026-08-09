@@ -36,8 +36,9 @@ Configuration:
   prompt, mode, retries, timeout_seconds, conventional, ticket_prefix,
   imperative, max_subject_length, body_style. The tool keeps its own working
   files (e.g. tmp summaries) in that directory too, so they move together.
-  Providers: ollama (default, model lfm2.5:8b) or openai_compat for any
-  OpenAI-compatible API (requires base_url).
+  Provider: openai_compat. The default base_url is Ollama
+  (http://localhost:11434/v1) with model lfm2.5:8b. Set base_url and model in
+  the config file for another OpenAI-compatible API.
   Resolution precedence (highest first):
     1. --config <path> flag (explicit config file for this invocation)
     2. COMMIT_PILOT_CONFIG_DIR env var (base config dir, e.g. ~/.config)

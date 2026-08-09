@@ -36,8 +36,8 @@ That's it. Review the proposed commits and press enter. No Go needed; `make
 install` works from source with Go 1.25+. The installer verifies a SHA-256
 checksum before installing.
 
-Ollama is the default provider (model `lfm2.5:8b`). For any other
-OpenAI-compatible server, set `provider: openai_compat` and a `base_url` in the
+The default `openai_compat` config points at Ollama with model `lfm2.5:8b`.
+For another OpenAI-compatible server, change `base_url` and `model` in the
 config file. See [Providers](docs/openai_compat.md).
 
 ## Dig deeper

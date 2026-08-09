@@ -63,7 +63,12 @@ func ParseArgs(args []string) (RawFlags, bool) {
 				return f, false
 			}
 		case strings.HasPrefix(a, "--config="):
-			f.ConfigPath = strings.TrimPrefix(a, "--config=")
+			path := strings.TrimPrefix(a, "--config=")
+			if path == "" {
+				f.Error = "--config requires a path"
+				return f, false
+			}
+			f.ConfigPath = path
 		case a == "--plan-out":
 			if i+1 < len(args) && args[i+1] != "" {
 				i++

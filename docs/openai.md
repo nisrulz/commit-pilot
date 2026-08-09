@@ -17,7 +17,7 @@ export COMMIT_PILOT_OPENAI_COMPAT_API_KEY=sk-...
 
 ## Configure commit-pilot
 
-Ollama is the default provider. To use OpenAI instead, edit your config file
+The default config points `openai_compat` at Ollama. To use OpenAI instead, edit your config file
 (`~/.config/commit-pilot/config.yaml`):
 
 ```yaml

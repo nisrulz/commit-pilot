@@ -76,8 +76,9 @@ type Config struct {
 }
 
 const (
-	EnvConfigDir = "COMMIT_PILOT_CONFIG_DIR"
-	EnvAPIKey    = "COMMIT_PILOT_OPENAI_COMPAT_API_KEY"
+	EnvConfigDir    = "COMMIT_PILOT_CONFIG_DIR"
+	EnvAPIKey       = "COMMIT_PILOT_OPENAI_COMPAT_API_KEY"
+	LegacyEnvAPIKey = "COMMIT_PILOT_OPENAI_API_KEY"
 )
 
 const (
@@ -85,8 +86,9 @@ const (
 	ToolDirName       = "commit-pilot"
 	DefaultConfigFile = "config.yaml"
 
-	// DefaultProviderName is used when no provider is configured.
-	DefaultProviderName = "ollama"
+	// DefaultProviderName is used when no provider is configured. Ollama is the
+	// default endpoint, exposed through the OpenAI-compatible provider.
+	DefaultProviderName = "openai_compat"
 
 	maxEnvAPIKeyLen = 512
 	maxConfigSize   = 1 << 20 // 1 MiB
@@ -108,7 +110,7 @@ const (
 	// its own.
 	defaultConfigYAML = `# commit-pilot configuration (created on first run).
 # Edit this file; it is the source of truth for the tool's settings.
-provider: ollama
+provider: openai_compat
 model: lfm2.5:8b
 base_url: http://localhost:11434/v1
 context_window: 65536
@@ -122,12 +124,12 @@ mode: auto
 
 // KnownProviders maps provider names to their default API base URLs.
 var KnownProviders = map[string]string{
-	"ollama": "http://localhost:11434/v1",
+	"openai_compat": DefaultAPIBase,
 }
 
 // ProviderDefaults maps provider names to their default model identifiers.
 var ProviderDefaults = map[string]string{
-	"ollama": "lfm2.5:8b",
+	"openai_compat": DefaultModel,
 }
 
 var knownOutputFormats = map[string]bool{
@@ -252,14 +254,18 @@ func ResolveConfig(f RawFlags) (Config, error) {
 	applyFlags(&cfg, f)
 	applyProfileDefaults(&cfg)
 
-	cfg.ProviderExplicit = providerConfigured != "" && providerConfigured != DefaultProviderName
+	cfg.ProviderExplicit = providerConfigured != ""
 	cfg.APIBaseExplicit = baseConfigured != "" && baseConfigured != DefaultAPIBase
 
 	if err := validateConfig(cfg); err != nil {
 		return Config{}, err
 	}
 
-	cfg.APIKey = apiKeyFromEnv()
+	apiKey, err := apiKeyFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.APIKey = apiKey
 
 	return cfg, nil
 }
@@ -459,12 +465,15 @@ func applyProfileDefaults(c *Config) {
 	}
 }
 
-func apiKeyFromEnv() string {
+func apiKeyFromEnv() (string, error) {
+	if os.Getenv(LegacyEnvAPIKey) != "" {
+		return "", fmt.Errorf("%s is no longer supported; rename it to %s", LegacyEnvAPIKey, EnvAPIKey)
+	}
 	key := os.Getenv(EnvAPIKey)
 	if len(key) > maxEnvAPIKeyLen {
 		key = key[:maxEnvAPIKeyLen]
 	}
-	return key
+	return key, nil
 }
 
 func loadUserConfig(path string) (fileConfig, error) {
@@ -550,9 +559,6 @@ func discoverRepoConfig() string {
 func validateConfig(c Config) error {
 	if err := validateProvider(c.Provider); err != nil {
 		return err
-	}
-	if c.Provider == "openai_compat" && c.APIBase == DefaultAPIBase {
-		return fmt.Errorf("provider \"openai_compat\" requires base_url")
 	}
 	if err := provider.ValidateURL(c.APIBase); err != nil {
 		return err

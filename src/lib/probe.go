@@ -34,7 +34,7 @@ func probeCandidatesFor(cfg Config) []probeCandidate {
 	if cfg.APIBaseExplicit {
 		return []probeCandidate{{"openai_compat", cfg.APIBase, modelsURL(cfg.APIBase)}}
 	}
-	return []probeCandidate{{"ollama", KnownProviders["ollama"], modelsURL(KnownProviders["ollama"])}}
+	return []probeCandidate{{DefaultProviderName, KnownProviders[DefaultProviderName], modelsURL(KnownProviders[DefaultProviderName])}}
 }
 
 // probeOne reports whether the provider at base answers a reachability probe,

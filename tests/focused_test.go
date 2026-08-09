@@ -235,7 +235,7 @@ func TestResolveConfigFileSettings(t *testing.T) {
 
 func TestResolveConfigProviderDefaults(t *testing.T) {
 	home := isolatedHome(t)
-	writeConfigFile(t, defaultPath(home), "provider: ollama\n")
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\n")
 
 	cfg, err := lib.ResolveConfig(lib.RawFlags{})
 	if err != nil {
@@ -246,6 +246,43 @@ func TestResolveConfigProviderDefaults(t *testing.T) {
 	}
 	if cfg.APIBase != "http://localhost:11434/v1" {
 		t.Fatalf("expected Ollama default base, got %q", cfg.APIBase)
+	}
+}
+
+func TestResolveConfigExplicitProviderWithCustomBase(t *testing.T) {
+	home := isolatedHome(t)
+	base := "https://ollama.example.com/v1"
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\nbase_url: "+base+"\n")
+
+	cfg, err := lib.ResolveConfig(lib.RawFlags{})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !cfg.ProviderExplicit || cfg.Provider != "openai_compat" || cfg.APIBase != base {
+		t.Fatalf("explicit provider/base was not preserved: %+v", cfg)
+	}
+}
+
+func TestRunDoctorReportsLoadedConfigPath(t *testing.T) {
+	home := isolatedHome(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"test-model"}]}`))
+	}))
+	defer server.Close()
+
+	path := filepath.Join(home, "custom.yaml")
+	cfg := lib.Config{
+		Provider:   "openai_compat",
+		APIBase:    server.URL + "/v1",
+		Model:      "test-model",
+		ConfigPath: path,
+		HTTPClient: server.Client(),
+	}
+	out := captureStdout(t, func() {
+		lib.RunDoctor(cfg)
+	})
+	if !strings.Contains(out, path) {
+		t.Fatalf("doctor output does not report loaded config path %q:\n%s", path, out)
 	}
 }
 
@@ -281,23 +318,23 @@ func TestResolveConfigCustomProviderRequiresBase(t *testing.T) {
 	}
 }
 
-func TestResolveConfigCustomProviderRejectsMissingBase(t *testing.T) {
+func TestResolveConfigOpenAICompatUsesOllamaDefaults(t *testing.T) {
 	home := isolatedHome(t)
 	writeConfigFile(t, defaultPath(home), "provider: openai_compat\n")
 
-	_, err := lib.ResolveConfig(lib.RawFlags{})
-	if err == nil || !strings.Contains(err.Error(), "requires base_url") {
-		t.Fatalf("expected missing-base error, got %v", err)
+	cfg, err := lib.ResolveConfig(lib.RawFlags{})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if cfg.APIBase != lib.DefaultAPIBase || cfg.Model != lib.DefaultModel {
+		t.Fatalf("expected Ollama defaults, got base=%q model=%q", cfg.APIBase, cfg.Model)
 	}
 }
 
 func TestResolveConfigKnownProviderNoError(t *testing.T) {
-	for _, name := range []string{"ollama", "openai_compat"} {
+	for _, name := range []string{"openai_compat"} {
 		home := isolatedHome(t)
 		content := "provider: " + name + "\n"
-		if name == "openai_compat" {
-			content += "base_url: http://127.0.0.1:9999/v1\n"
-		}
 		writeConfigFile(t, defaultPath(home), content)
 		if _, err := lib.ResolveConfig(lib.RawFlags{}); err != nil {
 			t.Fatalf("provider %q: unexpected resolve error %v", name, err)

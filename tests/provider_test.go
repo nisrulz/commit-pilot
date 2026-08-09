@@ -17,7 +17,6 @@ func TestProviderDispatch(t *testing.T) {
 		"":              "openai_compat",
 		"unknown":       "openai_compat",
 		"openai_compat": "openai_compat",
-		"ollama":        "ollama",
 	}
 	for name, want := range cases {
 		if got := provider.New(name).Name(); got != want {
@@ -27,7 +26,7 @@ func TestProviderDispatch(t *testing.T) {
 }
 
 func TestProviderKnownAndNames(t *testing.T) {
-	for _, name := range []string{"openai_compat", "ollama"} {
+	for _, name := range []string{"openai_compat"} {
 		if !provider.Known(name) {
 			t.Fatalf("Known(%q) = false, want true", name)
 		}
@@ -38,8 +37,8 @@ func TestProviderKnownAndNames(t *testing.T) {
 		}
 	}
 	names := provider.Names()
-	if len(names) != 2 {
-		t.Fatalf("Names() = %v, want 2 providers", names)
+	if len(names) != 1 {
+		t.Fatalf("Names() = %v, want 1 provider", names)
 	}
 	for i := 1; i < len(names); i++ {
 		if names[i] < names[i-1] {
@@ -82,7 +81,7 @@ func TestProviderProbeDrainsResponseBody(t *testing.T) {
 }
 
 func TestOpenAICompatProvidersProbeModels(t *testing.T) {
-	for _, name := range []string{"openai_compat", "ollama"} {
+	for _, name := range []string{"openai_compat"} {
 		var gotPath string
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path

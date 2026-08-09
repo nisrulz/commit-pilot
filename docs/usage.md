@@ -15,7 +15,7 @@ created on first run; the tool also keeps its own working files (e.g. tmp
 summaries) there, so they move together.
 
 ```yaml
-provider: ollama          # ollama | openai_compat
+provider: openai_compat
 model: lfm2.5:8b
 base_url: http://localhost:11434/v1
 context_window: 65536     # 64k tokens
@@ -39,6 +39,13 @@ are flags (`--dry-run`, `--cleanup`) rather than config values.
 The API key is never stored in the config file. Commit Pilot reads it from
 `COMMIT_PILOT_OPENAI_COMPAT_API_KEY` only, so it stays out of config files and shell
 history.
+
+### Upgrade from older versions
+
+Move `COMMIT_PILOT_OPENAI_API_KEY` to `COMMIT_PILOT_OPENAI_COMPAT_API_KEY`.
+Commit Pilot reports an error if the old variable is still set. The only
+provider value is now `openai_compat`; the generated config points it at Ollama
+by default.
 
 | Env var | Purpose | Default |
 |---|---|---|
@@ -84,11 +91,11 @@ body_style: short bullet list
 
 ## Provider selection
 
-Ollama is the default provider (`model: lfm2.5:8b`) and needs no setup. For
-any other OpenAI-compatible server (LM Studio, Unsloth Studio, OpenAI, ...),
-set `provider: openai_compat` with an explicit `base_url` in the config file.
-A named `provider` or a customized `base_url` is always respected and probed on
-its own.
+The only provider is `openai_compat`. The default config points it at Ollama
+(`http://localhost:11434/v1`) with model `lfm2.5:8b`. For LM Studio, Unsloth
+Studio, OpenAI, or another compatible server, change `base_url` and `model` in
+the config file. An explicit `provider` or customized `base_url` is always
+respected and probed on its own.
 
 ## Review the commit plan
 
@@ -178,14 +185,12 @@ commit-pilot --cleanup
 
 ## Providers
 
-The `provider` config key accepts `ollama` and `openai_compat`. Any other value
-aborts the run, so a typo cannot silently point commit-pilot at the wrong
-endpoint. Use `openai_compat` for an OpenAI-compatible API; it requires a
-`base_url`.
+The `provider` config key accepts only `openai_compat`. Any other value aborts
+the run, so a typo cannot silently point commit-pilot at the wrong endpoint.
 
 See the provider-specific guides:
 
-- [Ollama](ollama.md) (default, lfm2.5:8b)
+- [Ollama](ollama.md) (default endpoint, lfm2.5:8b)
 - [OpenAI-compatible](openai_compat.md) (any OpenAI-compatible API)
 - [OpenAI](openai.md) (gpt-5.6-luna)
 - [LM Studio](lmstudio.md) (openai_compat example, lfm2.5:8b)

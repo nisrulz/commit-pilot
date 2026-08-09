@@ -41,9 +41,9 @@ func TestPrecedenceFlagOverEnvOverDefault(t *testing.T) {
 	home := isolatedHome(t)
 
 	def := defaultPath(home)
-	writeConfigFile(t, def, "provider: ollama\nmodel: m-default\ncontext_window: 50000\n")
+	writeConfigFile(t, def, "provider: openai_compat\nmodel: m-default\ncontext_window: 50000\n")
 	envDir := filepath.Join(home, "env")
-	writeConfigFile(t, filepath.Join(envDir, "commit-pilot", "config.yaml"), "provider: ollama\nmodel: m-env\ncontext_window: 50000\n")
+	writeConfigFile(t, filepath.Join(envDir, "commit-pilot", "config.yaml"), "provider: openai_compat\nmodel: m-env\ncontext_window: 50000\n")
 	flagPath := filepath.Join(home, "flag.yaml")
 	writeConfigFile(t, flagPath, "provider: openai_compat\nmodel: m-flag\nbase_url: http://127.0.0.1:9999/v1\ncontext_window: 50000\n")
 
@@ -51,7 +51,7 @@ func TestPrecedenceFlagOverEnvOverDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("default path resolve: %v", err)
 	}
-	if cfg.Provider != "ollama" || cfg.Model != "m-default" || cfg.ConfigPath != def {
+	if cfg.Provider != "openai_compat" || cfg.Model != "m-default" || cfg.ConfigPath != def {
 		t.Fatalf("default path not used: %+v", cfg)
 	}
 
@@ -60,7 +60,7 @@ func TestPrecedenceFlagOverEnvOverDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("env resolve: %v", err)
 	}
-	if cfg.Provider != "ollama" || cfg.Model != "m-env" {
+	if cfg.Provider != "openai_compat" || cfg.Model != "m-env" {
 		t.Fatalf("env dir not used: %+v", cfg)
 	}
 
@@ -87,7 +87,7 @@ func TestPrecedenceFlagOverConfigOverProfileDefaults(t *testing.T) {
 	if cfg.ContextWindow != 5000 {
 		t.Fatalf("config context_window should win, got %d", cfg.ContextWindow)
 	}
-	if cfg.Provider != "ollama" || cfg.APIBase != lib.KnownProviders["ollama"] {
+	if cfg.Provider != "openai_compat" || cfg.APIBase != lib.KnownProviders["openai_compat"] {
 		t.Fatalf("missing provider should fall back to profile defaults: %+v", cfg)
 	}
 	if cfg.Mode != lib.ModeAuto || !cfg.DryRun || cfg.Cleanup {
@@ -123,7 +123,7 @@ func TestMissingFileSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing env config dir should be ignored: %v", err)
 	}
-	if cfg.Provider != "ollama" || cfg.Model != lib.DefaultModel {
+	if cfg.Provider != "openai_compat" || cfg.Model != lib.DefaultModel {
 		t.Fatalf("expected defaults with missing env config dir, got %+v", cfg)
 	}
 
@@ -133,7 +133,7 @@ func TestMissingFileSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing default config should be ignored: %v", err)
 	}
-	if cfg.Provider != "ollama" || cfg.Model != lib.DefaultModel {
+	if cfg.Provider != "openai_compat" || cfg.Model != lib.DefaultModel {
 		t.Fatalf("expected defaults with missing default config, got %+v", cfg)
 	}
 	if cfg.ContextWindow <= 0 {
@@ -270,7 +270,7 @@ func TestOversizedConfig(t *testing.T) {
 
 func TestAPIKeyFromEnvNotFile(t *testing.T) {
 	home := isolatedHome(t)
-	writeConfigFile(t, defaultPath(home), "provider: ollama\ncontext_window: 50000\n")
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\ncontext_window: 50000\n")
 	t.Setenv(lib.EnvAPIKey, "sk-env-123")
 
 	cfg, err := lib.ResolveConfig(lib.RawFlags{})
@@ -292,6 +292,16 @@ func TestAPIKeyFromEnvNotFile(t *testing.T) {
 	}
 }
 
+func TestLegacyAPIKeyEnvRequiresRename(t *testing.T) {
+	home := isolatedHome(t)
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\n")
+	t.Setenv(lib.LegacyEnvAPIKey, "sk-old")
+
+	if _, err := lib.ResolveConfig(lib.RawFlags{}); err == nil || !strings.Contains(err.Error(), lib.EnvAPIKey) {
+		t.Fatalf("expected legacy API key migration error, got %v", err)
+	}
+}
+
 // --- per-session scoping ---
 
 func TestPerSessionScoping(t *testing.T) {
@@ -299,8 +309,8 @@ func TestPerSessionScoping(t *testing.T) {
 
 	dirA := filepath.Join(home, "a")
 	dirB := filepath.Join(home, "b")
-	writeConfigFile(t, filepath.Join(dirA, "commit-pilot", "config.yaml"), "provider: ollama\nmodel: model-a\ncontext_window: 50000\n")
-	writeConfigFile(t, filepath.Join(dirB, "commit-pilot", "config.yaml"), "provider: ollama\nmodel: model-b\ncontext_window: 50000\n")
+	writeConfigFile(t, filepath.Join(dirA, "commit-pilot", "config.yaml"), "provider: openai_compat\nmodel: model-a\ncontext_window: 50000\n")
+	writeConfigFile(t, filepath.Join(dirB, "commit-pilot", "config.yaml"), "provider: openai_compat\nmodel: model-b\ncontext_window: 50000\n")
 
 	// inline prefix / per-run env is read fresh on each invocation
 	t.Setenv(lib.EnvConfigDir, dirA)
@@ -333,7 +343,7 @@ func TestPerSessionScoping(t *testing.T) {
 func TestValidation(t *testing.T) {
 	home := isolatedHome(t)
 
-	base := "provider: ollama\ncontext_window: 50000\n"
+	base := "provider: openai_compat\ncontext_window: 50000\n"
 	for name, extra := range map[string]string{
 		"unknown provider":     "provider: gpt5\n",
 		"http non-loopback":    "base_url: http://api.example.com/v1\n",
@@ -356,7 +366,7 @@ func TestValidation(t *testing.T) {
 	if _, err := lib.ResolveConfig(lib.RawFlags{}); err != nil {
 		t.Fatalf("valid https remote should pass: %v", err)
 	}
-	writeConfigFile(t, defaultPath(home), "provider: ollama\nbase_url: http://127.0.0.1:11434/v1\ncontext_window: 50000\n")
+	writeConfigFile(t, defaultPath(home), "provider: openai_compat\nbase_url: http://127.0.0.1:11434/v1\ncontext_window: 50000\n")
 	if _, err := lib.ResolveConfig(lib.RawFlags{}); err != nil {
 		t.Fatalf("valid loopback http should pass: %v", err)
 	}
@@ -371,8 +381,8 @@ func TestDefaultsWithNoConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve with no config: %v", err)
 	}
-	if cfg.Provider != "ollama" {
-		t.Fatalf("default provider should be ollama, got %q", cfg.Provider)
+	if cfg.Provider != "openai_compat" {
+		t.Fatalf("default provider should be openai_compat, got %q", cfg.Provider)
 	}
 	if cfg.Model != lib.DefaultModel {
 		t.Fatalf("default model mismatch, got %q", cfg.Model)
@@ -414,6 +424,10 @@ func TestParseConfigArgs(t *testing.T) {
 	flags, _ = lib.ParseArgs([]string{"--config"})
 	if flags.Error == "" {
 		t.Fatal("--config without a value should error")
+	}
+	flags, _ = lib.ParseArgs([]string{"--config="})
+	if flags.Error == "" {
+		t.Fatal("--config= without a value should error")
 	}
 	// the old `config ...` subcommand is rejected, never run as the pipeline
 	flags, _ = lib.ParseArgs([]string{"config", "show"})
