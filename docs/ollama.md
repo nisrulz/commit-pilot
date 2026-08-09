@@ -1,57 +1,73 @@
 # Ollama
 
-Ollama is the default endpoint and requires no extra configuration.
+Commit Pilot uses Ollama through its OpenAI-compatible API. The generated
+config points to Ollama by default:
 
-## Install
+```yaml
+provider: openai_compat
+base_url: http://localhost:11434/v1
+model: lfm2.5:8b
+```
+
+Ollama's OpenAI-compatible API uses the `/v1/chat/completions` and `/v1/models`
+routes. Ollama does not require an API key for a local server.
+
+## Install Ollama
+
+Install Ollama from [ollama.com/download](https://ollama.com/download). On
+macOS with Homebrew:
 
 ```bash
 brew install ollama
 ```
 
-Or download from [ollama.com](https://ollama.com).
-
-## Download model
-
-The script downloads the default model:
-
-```bash
-make setup-ollama
-```
-
-## Serve
+## Start Ollama
 
 ```bash
 ollama serve
 ```
 
-## Configure commit-pilot
+Keep the server running while you use Commit Pilot.
 
-Ollama is the default endpoint for `openai_compat` (model `lfm2.5:8b`, which is
-Liquid AI's LFM2.5-8B-A1B), so a fresh install works out of the box. Your config file
-(`~/.config/commit-pilot/config.yaml`) already carries the defaults; add or
-edit these values to change them:
+## Download a model
 
-```yaml
-provider: openai_compat
-model: lfm2.5:8b
+Pull the default model (`lfm2.5:8b`) from the
+[Ollama library](https://ollama.com/library/lfm2.5):
+
+```bash
+ollama pull lfm2.5:8b
+ollama ls
 ```
 
-Check the server and available models:
+The value in `model` must match the model name shown by `ollama ls`.
+
+## Check the connection
 
 ```bash
 commit-pilot --doctor
 commit-pilot --list-models
 ```
 
-Custom API base:
+`--doctor` checks the server and confirms that the configured model appears in
+the model list.
+
+## Use another Ollama model
+
+Edit `~/.config/commit-pilot/config.yaml`:
 
 ```yaml
 provider: openai_compat
-model: lfm2.5:8b
 base_url: http://localhost:11434/v1
+model: qwen3:8b
 ```
 
-## Run commit-pilot
+Pull the model before you run Commit Pilot:
+
+```bash
+ollama pull qwen3:8b
+```
+
+## Run Commit Pilot
 
 ```bash
 commit-pilot

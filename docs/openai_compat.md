@@ -1,42 +1,53 @@
-# OpenAI-compatible providers
+# OpenAI-compatible API
 
-`openai_compat` targets any server that exposes an OpenAI-compatible
-`/chat/completions` and `/models` API. That includes hosted endpoints such as
-OpenAI and local servers such as [LM Studio](lmstudio.md) and
-[Unsloth Studio](unsloth.md). The default `base_url` points at Ollama.
+Commit Pilot has one provider: `openai_compat`. Use it for Ollama, LM Studio,
+Unsloth Studio, OpenAI, or another server that implements the OpenAI
+`/v1/chat/completions` and `/v1/models` endpoints.
 
-## Configure commit-pilot
+## Configuration
 
-Commit Pilot reads the API key from the `COMMIT_PILOT_OPENAI_COMPAT_API_KEY`
-environment variable, never from a config file or the command line. That keeps
-it out of shell history. Export it from a secret manager or your shell profile:
-
-```bash
-export COMMIT_PILOT_OPENAI_COMPAT_API_KEY=sk-...
-```
-
-Add to your config file (`~/.config/commit-pilot/config.yaml`):
+The generated config uses Ollama as the default endpoint:
 
 ```yaml
 provider: openai_compat
-base_url: https://api.openai.com/v1
-model: gpt-5.6-luna
+base_url: http://localhost:11434/v1
+model: lfm2.5:8b
 ```
 
-## Run commit-pilot
+For another server, change `base_url` and `model` to values exposed by that
+server. Use `commit-pilot --list-models` to get the exact model IDs.
+
+## API keys
+
+Commit Pilot reads the API key from:
 
 ```bash
-commit-pilot
+export COMMIT_PILOT_OPENAI_COMPAT_API_KEY=...
 ```
 
-Verify the selected model before committing:
+Local Ollama and most local LM Studio servers do not need a key. OpenAI and
+Unsloth Studio require one. Never put an API key in `config.yaml` or a
+repository file.
+
+## Verify the endpoint
+
+The provider must expose these routes under the configured base URL:
+
+```text
+GET  /models
+POST /chat/completions
+```
+
+Check the endpoint and model:
 
 ```bash
 commit-pilot --doctor
+commit-pilot --list-models
 ```
 
-## Examples
+## Provider guides
 
-- [OpenAI](openai.md) is the hosted example
-- [LM Studio](lmstudio.md) and [Unsloth Studio](unsloth.md) are two local
-  examples of the same setup
+- [Ollama](ollama.md)
+- [LM Studio](lmstudio.md)
+- [Unsloth Studio](unsloth.md)
+- [OpenAI](openai.md)

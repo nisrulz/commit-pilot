@@ -1,7 +1,6 @@
-.PHONY: help build install uninstall clean setup setup-lmstudio setup-ollama vet test test-cover test-live
+.PHONY: help build install uninstall clean vet test test-cover test-live
 
 BINARY := commit-pilot
-PROVIDER ?= ollama
 
 help:
 	@echo "Usage: make <target>"
@@ -11,8 +10,6 @@ help:
 	@echo "  install               Build and copy to ~/go/bin"
 	@echo "  uninstall             Remove from ~/go/bin"
 	@echo "  clean                 Remove the binary"
-	@echo "  setup-lmstudio        Setup LMStudio"
-	@echo "  setup-ollama          Setup Ollama"
 	@echo "  vet                   Run go vet (static analysis)"
 	@echo "  test                  Run unit tests"
 	@echo "  test-cover            Run tests with coverage report"
@@ -42,15 +39,6 @@ test-cover:
 
 test-live:
 	@go run ./scripts/livetable
-
-setup:
-	@scripts/setup-$(PROVIDER).sh
-
-setup-lmstudio:
-	@scripts/setup-lmstudio.sh
-
-setup-ollama:
-	@scripts/setup-ollama.sh
 
 clean:
 	@rm -f $(BINARY)

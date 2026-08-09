@@ -40,8 +40,6 @@ commit-pilot/
 │   ├── install.sh        # One-line install script
 │   ├── live-test.sh      # Live integration test driver
 │   ├── livetable/        # Renders live-test results (make test-live)
-│   ├── setup-lmstudio.sh # LMStudio model download
-│   ├── setup-ollama.sh   # Ollama model download
 │   ├── setup-path.sh     # PATH setup helper
 │   └── testtable/        # Renders unit/e2e results (make test)
 ├── src/
@@ -97,8 +95,6 @@ commit-pilot/
 | `make test` | Run unit and end-to-end tests |
 | `make clean` | Remove the binary |
 | `make test-live` | Run live integration test (requires AI provider running) |
-| `make setup-lmstudio` | Download default model for LMStudio |
-| `make setup-ollama` | Download default model for Ollama |
 | `make uninstall` | Remove from `~/go/bin` |
 
 ## Testing

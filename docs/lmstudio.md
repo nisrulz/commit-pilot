@@ -1,39 +1,69 @@
 # LM Studio
 
-LM Studio is a local, OpenAI-compatible server. Point the `openai_compat`
-provider at it with a `base_url`.
+LM Studio runs local models and exposes an OpenAI-compatible API. Commit Pilot
+uses the `openai_compat` provider for this API.
 
-## Install
+## Install LM Studio
+
+Download LM Studio from [lmstudio.ai/download](https://lmstudio.ai/download).
+
+LM Studio supports macOS, Windows, and Linux. Check the
+[system requirements](https://lmstudio.ai/docs/app/system-requirements) before
+installing it.
+
+## Download and load a model
+
+Open LM Studio, search for a model, and download a GGUF quantization. The model
+identifier is not fixed by LM Studio. It depends on the model you download and
+the loaded variant.
+
+The LFM2.5 GGUF is one option:
+
+`LiquidAI/LFM2.5-8B-A1B-GGUF`
+
+You can also download it with the CLI if `lms` is installed:
 
 ```bash
-brew install --cask lm-studio
+lms get LiquidAI/LFM2.5-8B-A1B-GGUF
 ```
 
-Or download from [lmstudio.ai](https://lmstudio.ai).
+Load the model in LM Studio before starting the server.
 
-## Download model
+## Start the OpenAI-compatible server
 
-The script downloads the default model (`LiquidAI/LFM2.5-8B-A1B-GGUF`, the
-same model as Ollama's `lfm2.5:8b`) and starts the server:
+Open the **Developer** tab in LM Studio and start the server. The default
+server address is `http://localhost:1234`.
 
-```bash
-make setup-lmstudio
-```
+Commit Pilot needs the `/v1` base URL:
 
-## Configure commit-pilot
+`http://localhost:1234/v1`
 
-The default config points `openai_compat` at Ollama. To use LM Studio instead, edit your config file
-(`~/.config/commit-pilot/config.yaml`):
+LM Studio documents the available routes in its
+[OpenAI compatibility guide](https://lmstudio.ai/docs/developer/openai-compat).
+
+## Configure Commit Pilot
+
+Add the model ID shown by LM Studio to
+`~/.config/commit-pilot/config.yaml`:
 
 ```yaml
 provider: openai_compat
-model: LiquidAI/LFM2.5-8B-A1B-GGUF
 base_url: http://localhost:1234/v1
+model: paste-the-id-from-lm-studio
 ```
 
-Check the server and model name:
+Do not assume that the Hugging Face repository name is the API model ID. Run
+`commit-pilot --list-models` and copy the exact ID returned by LM Studio.
+
+## Check the connection
 
 ```bash
 commit-pilot --doctor
 commit-pilot --list-models
+```
+
+## Run Commit Pilot
+
+```bash
+commit-pilot
 ```

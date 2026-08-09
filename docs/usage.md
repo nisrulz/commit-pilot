@@ -190,8 +190,8 @@ the run, so a typo cannot silently point commit-pilot at the wrong endpoint.
 
 See the provider-specific guides:
 
-- [Ollama](ollama.md) (default endpoint, lfm2.5:8b)
+- [Ollama](ollama.md) (default endpoint, [lfm2.5:8b](https://ollama.com/library/lfm2.5))
 - [OpenAI-compatible](openai_compat.md) (any OpenAI-compatible API)
 - [OpenAI](openai.md) (gpt-5.6-luna)
-- [LM Studio](lmstudio.md) (openai_compat example, lfm2.5:8b)
-- [Unsloth Studio](unsloth.md) (openai_compat example)
+- [LM Studio](lmstudio.md) (openai_compat example; model ID depends on the loaded model)
+- [Unsloth Studio](unsloth.md) (openai_compat example; model ID depends on the loaded model)

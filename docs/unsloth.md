@@ -1,75 +1,89 @@
 # Unsloth Studio
 
-Unsloth Studio is a local, OpenAI-compatible server. Point the `openai_compat`
-provider at it with a `base_url`.
+Unsloth Studio runs local models and exposes an authenticated
+OpenAI-compatible API. Commit Pilot uses the `openai_compat` provider for this
+API.
 
-## Install
+## Install and start Unsloth Studio
 
-Follow the instructions at [unsloth.ai](https://unsloth.ai) to install Unsloth Studio.
+Install Unsloth Studio with the official installer:
+
+```bash
+curl -fsSL https://unsloth.ai/install.sh | sh
+```
+
+For Windows, use the PowerShell installer from the
+[Unsloth installation guide](https://unsloth.ai/docs/new/studio/install.md).
+
+Start the local server:
+
+```bash
+unsloth studio -p 8888
+```
+
+Open `http://127.0.0.1:8888` in a browser. Create the initial password if the
+installation asks for one.
 
 ## Load a model
 
-```bash
-unsloth run --model unsloth/LFM2.5-8B-A1B-GGUF -p 8888
-```
+Open **New Chat** in Unsloth Studio and load a model. You can search for a
+Hugging Face model or select a local model. The API model ID depends on the
+loaded model and quantization.
 
-This is the same model as Ollama's `lfm2.5:8b`, in Unsloth's dynamic-quant
-format. Or open the Unsloth Studio UI, load a GGUF model via New Chat, and
-create an API key from **Settings → API**.
+The LFM2.5 GGUF is one option. Search for this repository in Unsloth Studio:
 
-## Enable automatic model loading
+`LiquidAI/LFM2.5-8B-A1B-GGUF`
 
-Unsloth Studio keeps models unloaded until you start a chat. The first API
-call fails with:
+The model ID returned by the API can include a quantization or loaded-model
+suffix. Use the value returned by your instance instead of copying the
+repository name into the config.
 
-```
-No model loaded. Call POST /inference/load first.
-```
+## Create an API key
 
-Now, that is an issue 🤔. The fix is quite simple though. Turn on **Model
-auto-switch** under **Settings → API**. Unsloth Studio then loads the requested
-model on the first API call, and commit-pilot just works.
+Open **Settings**, then **API**. Create a key and copy it immediately. Unsloth
+shows the key only once.
 
-![Settings → API with Model auto-switch enabled](../img/unsloth-auto-load.png)
-
-## Configure commit-pilot
-
-Commit Pilot reads the API key from the `COMMIT_PILOT_OPENAI_COMPAT_API_KEY`
-environment variable, never from a config file or the command line. That keeps
-it out of shell history. Export it from a secret manager or your shell profile:
+Export it for Commit Pilot:
 
 ```bash
 export COMMIT_PILOT_OPENAI_COMPAT_API_KEY=sk-unsloth-...
 ```
 
-Add to your config file (`~/.config/commit-pilot/config.yaml`):
+Keep this key private. Anyone who can use it can send requests to the loaded
+model.
+
+## Configure Commit Pilot
+
+Unsloth normally serves on port `8888`. Add the exact model ID returned by
+`GET /v1/models` to `~/.config/commit-pilot/config.yaml`:
 
 ```yaml
 provider: openai_compat
 base_url: http://localhost:8888/v1
-model: unsloth/LFM2.5-8B-A1B-GGUF
+model: paste-the-id-from-unsloth
 ```
 
-Unsloth Studio's API is key-protected, so `--doctor` reports reachability for
-the server and keeps the model check separate. You can confirm the server is
-running even before the key is configured; the key is still required for actual
-model calls.
+List the models exposed by Unsloth:
 
-Check the server and available model names:
+```bash
+curl http://localhost:8888/v1/models \
+  -H "Authorization: Bearer $COMMIT_PILOT_OPENAI_COMPAT_API_KEY"
+```
+
+Copy the `id` value from the response into the `model` setting.
+
+## Check the connection
 
 ```bash
 commit-pilot --doctor
 commit-pilot --list-models
 ```
 
-For a different API base:
-
-```yaml
-base_url: http://localhost:8000/v1
-```
-
-## Run commit-pilot
+## Run Commit Pilot
 
 ```bash
 commit-pilot
 ```
+
+Read the [Unsloth API guide](https://unsloth.ai/docs/basics/api.md) for API
+routes, authentication, model loading, and server security.
