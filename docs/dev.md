@@ -112,32 +112,13 @@ The integration test runs commit-pilot against a real AI endpoint.
 The script checks that your AI provider is reachable before starting. If it is not, it prints setup instructions.
 
 The script builds a YAML config file under a temp config base and runs the binary
-with `COMMIT_PILOT_CONFIG_DIR` set. `OPENAI_BASE_URL` / `OPENAI_API_KEY` are
-test harness inputs used to build that config. They are not read by the tool
-itself.
+with `COMMIT_PILOT_CONFIG_DIR` set. Local runs use Ollama. GitHub Actions starts
+the Go mock server in `scripts/mock-openai` and uses the standard `CI` variable
+to point the same harness at it.
 
 **Ollama (default):**
 ```bash
 make test-live
-```
-
-**LM Studio (openai_compat):**
-```bash
-OPENAI_BASE_URL=http://localhost:1234/v1 make test-live
-```
-
-**OpenAI (or any OpenAI-compatible endpoint):**
-```bash
-OPENAI_BASE_URL=https://api.openai.com/v1 \
-  OPENAI_API_KEY=sk-... \
-  make test-live
-```
-
-**Unsloth Studio (openai_compat):**
-```bash
-OPENAI_BASE_URL=http://localhost:8888/v1 \
-  OPENAI_API_KEY=sk-unsloth-... \
-  make test-live
 ```
 
 It sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:

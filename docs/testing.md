@@ -47,33 +47,18 @@ Coverage is measured for the `src/lib` package across both suites.
 
 The integration test runs commit-pilot against a real AI endpoint.
 
-The script checks that your AI provider is reachable before starting. It probes
-the default Ollama endpoint (trying both `localhost` and `127.0.0.1`) or, when
-`OPENAI_BASE_URL` is set, that endpoint's `/models` route. A 401 counts as
-reachable, so key-protected servers such as Unsloth Studio are recognized even
-before the API key is configured. If nothing responds, it prints setup
+Run `make test-live` locally against live Ollama by default. The GitHub Actions
+workflow does not need Ollama or an API key. It starts the Go mock server in
+`scripts/mock-openai` and passes its endpoint to the same test harness.
+
+The script checks that the default Ollama endpoint is reachable before starting.
+It tries both `localhost` and `127.0.0.1`. A 401 counts as reachable because
+the server is up but needs an API key. If nothing responds, it prints setup
 instructions.
 
 **Ollama (default):**
 ```bash
 make test-live
-```
-
-**LM Studio (openai_compat):**
-```bash
-OPENAI_BASE_URL=http://localhost:1234/v1 make test-live
-```
-
-**OpenAI (or any OpenAI-compatible endpoint):**
-```bash
-OPENAI_BASE_URL=https://api.openai.com/v1 \
-  OPENAI_API_KEY=sk-... \
-  make test-live
-```
-
-**Unsloth Studio (openai_compat):**
-```bash
-OPENAI_BASE_URL=http://localhost:8888/v1 make test-live
 ```
 
 The script sets up a temporary git repo with staged changes across docs,

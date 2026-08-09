@@ -16,3 +16,17 @@ jobs:
       - run: go test -count=1 ./tests/... -coverpkg=./src/lib/
       - run: go build -o commit-pilot ./src/
       - run: sh -n scripts/live-test.sh
+      - name: Run live tests with mock provider
+        run: |
+          go build -o "$RUNNER_TEMP/mock-openai" ./scripts/mock-openai
+          "$RUNNER_TEMP/mock-openai" &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18080/v1/models >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/v1/models >/dev/null
+          make test-live

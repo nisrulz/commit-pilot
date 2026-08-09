@@ -4,7 +4,10 @@ set -eu
 PROJECT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 BINARY="$PROJECT_DIR/commit-pilot"
 TESTDIR="$PROJECT_DIR/.temp-test"
-API_BASE="${OPENAI_BASE_URL:-http://localhost:11434/v1}"
+API_BASE="http://localhost:11434/v1"
+if [ "${CI:-}" = "true" ]; then
+  API_BASE="http://127.0.0.1:18080/v1"
+fi
 PASS=0
 FAIL=0
 RESULTS="${COMMIT_PILOT_LIVE_RESULTS:-$(mktemp "${TMPDIR:-/tmp}/commit-pilot-live.XXXXXX")}"
@@ -81,65 +84,34 @@ probe_endpoint() {
 }
 
 # probe_reachable returns 0 when the server answers at $1 with any HTTP
-# response. A 401 counts as reachable: the server is up but needs OPENAI_API_KEY
-# (sent along when set). Only a total connection failure (000) is a miss.
+# response. A 401 counts as reachable: the server is up but needs an API key.
+# Only a total connection failure (000) is a miss.
 probe_reachable() {
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-    ${OPENAI_API_KEY:+-H "Authorization: Bearer $OPENAI_API_KEY"} \
+    ${COMMIT_PILOT_OPENAI_COMPAT_API_KEY:+-H "Authorization: Bearer $COMMIT_PILOT_OPENAI_COMPAT_API_KEY"} \
     "$1")
   [ "$code" != "000" ]
 }
 
-# Each known provider entry carries: name, API base for commit-pilot, provider
-# name, and the URL used to probe reachability. Ollama is the default local
-# provider; everything else is an OpenAI-compatible endpoint via openai_compat.
-PROVIDERS=""
-if [ -n "${OPENAI_BASE_URL:-}" ]; then
-  probe_header "Probing custom endpoint $OPENAI_BASE_URL ..."
-  if probe_endpoint "${OPENAI_BASE_URL%/}/models"; then
-    PROVIDERS="openai_compat"
-    API_BASE="$OPENAI_BASE_URL"
-  fi
+PROVIDERS="openai_compat"
+probe_header "Probing Ollama endpoint"
+if probe_endpoint "${API_BASE%/}/models"; then
+  probe_row "openai_compat" "${API_BASE%/}/models" 1
 else
-  probe_header "Probing available AI providers"
-  for entry in "ollama|http://localhost:11434/v1|ollama|http://localhost:11434/v1/models"; do
-    name=$(echo "$entry" | cut -d'|' -f1)
-    api_base=$(echo "$entry" | cut -d'|' -f2)
-    pname=$(echo "$entry" | cut -d'|' -f3)
-    probe_url=$(echo "$entry" | cut -d'|' -f4)
-    if probe_endpoint "$probe_url"; then
-      probe_row "$name" "$probe_url" 1
-      PROVIDERS="$pname"
-      API_BASE="$api_base"
-      break
-    else
-      probe_row "$name" "$probe_url" 0
-    fi
-  done
+  PROVIDERS=""
+  probe_row "openai_compat" "${API_BASE%/}/models" 0
 fi
 
 if [ -z "$PROVIDERS" ]; then
   echo ""
   echo "  ${C_RED}${C_BOLD}! Cannot reach any AI API.${C_RESET}"
   echo ""
-  echo "    Start one of these providers:"
+  echo "    Start Ollama locally:"
   echo ""
   echo "    ${C_CYAN}${C_BOLD}Ollama (default):${C_RESET}"
   echo "      \$ ollama serve"
   echo "      \$ ollama pull lfm2.5:8b"
   echo "      URL: http://localhost:11434/v1"
-  echo ""
-  echo "    ${C_CYAN}${C_BOLD}LM Studio (openai_compat):${C_RESET}"
-  echo "      \$ lms server start"
-  echo "      \$ lms get LiquidAI/LFM2.5-8B-A1B-GGUF -y"
-  echo "      URL: http://localhost:1234/v1"
-  echo ""
-  echo "    ${C_CYAN}${C_BOLD}Unsloth Studio (openai_compat):${C_RESET}"
-  echo "      \$ unsloth run --model unsloth/LFM2.5-8B-A1B-GGUF -p 8888"
-  echo "      URL: http://localhost:8888/v1"
-  echo ""
-  echo "    ${C_CYAN}${C_BOLD}Or set a custom endpoint:${C_RESET}"
-  echo "      \$ OPENAI_BASE_URL=<url> make test-live"
   echo ""
   cleanup
   exit 1
@@ -148,18 +120,13 @@ fi
 # --- write the tool's config file under an isolated config base ---
 CONFIG_BASE="$TESTDIR/config-base"
 export COMMIT_PILOT_CONFIG_DIR="$CONFIG_BASE"
-export COMMIT_PILOT_OPENAI_COMPAT_API_KEY="${OPENAI_API_KEY:-}"
 
 # write_config [context_window]
 write_config() {
   mkdir -p "$CONFIG_BASE/commit-pilot"
   {
-    if [ -n "${OPENAI_BASE_URL:-}" ]; then
-      echo "provider: ${OPENAI_PROVIDER:-openai_compat}"
-      echo "base_url: $OPENAI_BASE_URL"
-    else
-      echo "provider: $PROVIDERS"
-    fi
+    echo "provider: $PROVIDERS"
+    echo "base_url: $API_BASE"
     [ -n "${1:-}" ] && echo "context_window: $1"
   } > "$CONFIG_BASE/commit-pilot/config.yaml"
   chmod 600 "$CONFIG_BASE/commit-pilot/config.yaml"
