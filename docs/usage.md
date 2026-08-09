@@ -6,72 +6,89 @@ setup, see the provider guides listed at the bottom.
 
 ## Configuration
 
-Configuration comes from environment variables or a local config file.
-Environment values always win.
+The CLI ships no config. Everything except the API key lives in a single YAML
+config file that is created on first run with the default values and is the
+source of truth. User config lives at `$COMMIT_PILOT_CONFIG_DIR/commit-pilot/config.yaml`.
+`COMMIT_PILOT_CONFIG_DIR` defaults to `~/.config`, so by default the config
+file is `~/.config/commit-pilot/config.yaml`. The `commit-pilot` subdir is
+created on first run; the tool also keeps its own working files (e.g. tmp
+summaries) there, so they move together.
 
-| Setting | Env var | Default |
-|---|---|---|
-| Provider | `OPENAI_PROVIDER` | `lmstudio` |
-| Model | `OPENAI_MODEL` | `gemma-4-e2b-it-qat` |
-| API base | `OPENAI_BASE_URL` | `http://localhost:1234/v1` |
-| API key | `OPENAI_API_KEY` | unset |
-| Prompt text | `COMMIT_PILOT_PROMPT` | built-in |
-| Prompt file | `COMMIT_PILOT_PROMPT_FILE` | unset |
-| Context window | `COMMIT_PILOT_CONTEXT_WINDOW` | `65536` (64k tokens) |
-| Retries | `COMMIT_PILOT_RETRIES` | `2` |
-| Request timeout | `COMMIT_PILOT_TIMEOUT_SECONDS` | `180` |
-| Configuration directory | `COMMIT_PILOT_CONFIG_DIR` | `~/.config/commit-pilot` |
-| Temporary summaries directory | `COMMIT_PILOT_TMP_DIR` | `~/.commit-pilot/tmp` |
-| Conventional commits | `COMMIT_PILOT_CONVENTIONAL_COMMITS` | `true` |
-| Ticket prefix | `COMMIT_PILOT_TICKET_PREFIX` | unset |
-| Imperative subject tone | `COMMIT_PILOT_IMPERATIVE_TONE` | `true` |
-| Subject limit | `COMMIT_PILOT_MAX_SUBJECT_LENGTH` | `100` |
-| Commit body style | `COMMIT_PILOT_BODY_STYLE` | model default |
-
-### Config files
-
-Temporary AI summaries and configuration use separate locations.
-`COMMIT_PILOT_TMP_DIR` controls the disposable summaries created in auto mode.
-`COMMIT_PILOT_CONFIG_DIR` contains reusable provider defaults.
-
-For reusable provider defaults, create `config.env` in `COMMIT_PILOT_CONFIG_DIR`:
-
-```dotenv
-OPENAI_PROVIDER=ollama
-OPENAI_MODEL=gemma4:e2b-it-qat
-OPENAI_BASE_URL=http://localhost:11434/v1
+```yaml
+provider: ollama          # ollama | openai_compat
+model: lfm2.5:8b
+base_url: http://localhost:11434/v1
+context_window: 65536     # 64k tokens
+retries: 2
+timeout_seconds: 180
+conventional: true
+ticket_prefix: ""
+imperative: true
+max_subject_length: 100
+body_style: ""
+prompt: ...              # optional custom prompt text
+mode: auto               # auto | single
+dry_run: false
+cleanup: false
 ```
 
-If the file does not exist, Commit Pilot creates it with the default LM Studio
-provider, model, and API base on its first run.
+Missing keys fall back to the built-in defaults. The file is written with `0600`
+permissions; edit it directly to configure the tool. `dry_run` and `cleanup`
+are flags (`--dry-run`, `--cleanup`) rather than config values.
 
-Values set in the environment take precedence over this file. API keys stay
-environment-only.
+The API key is never stored in the config file. Commit Pilot reads it from
+`COMMIT_PILOT_OPENAI_COMPAT_API_KEY` only, so it stays out of config files and shell
+history.
 
-For repository-specific message preferences, add `.commit-pilot/config.env`.
-Project files cannot change the provider, model, or API base. Those settings
-come from your environment or user config, so a cloned repository cannot choose
-where your diff is sent. Commit Pilot never creates the project file.
+| Env var | Purpose | Default |
+|---|---|---|
+| `COMMIT_PILOT_CONFIG_DIR` | Base config directory | `~/.config` |
+| `COMMIT_PILOT_OPENAI_COMPAT_API_KEY` | API key (never stored in config) | unset |
 
-Message preferences work in either config file:
-`COMMIT_PILOT_CONVENTIONAL_COMMITS`, `COMMIT_PILOT_TICKET_PREFIX`,
-`COMMIT_PILOT_IMPERATIVE_TONE`, `COMMIT_PILOT_MAX_SUBJECT_LENGTH`, and
-`COMMIT_PILOT_BODY_STYLE`. Environment values override config values.
+### Resolution precedence (highest first)
+
+1. `--config <path>` flag (config file for this invocation)
+2. `COMMIT_PILOT_CONFIG_DIR` env var
+3. `~/.config/commit-pilot/config.yaml`
+
+An explicit `--config` pointing at a missing file is a hard error. A missing
+file from the env var or default path is created with the default values on
+first run, so a fresh install works before any config exists and the file is
+then the source of truth.
+
+### Session scope
+
+- `--config <path>` applies to a single invocation.
+- `COMMIT_PILOT_CONFIG_DIR=/path commit-pilot ...` applies to that command line
+  only (the value is not exported to the shell).
+- Only `export COMMIT_PILOT_CONFIG_DIR=/path` makes it persist for the shell
+  session.
+
+### Repository config (untrusted)
+
+For repository-specific preferences, add `.commit-pilot.yaml` to the
+repository. It is treated as untrusted and may only set commit-message
+preferences (`conventional`, `ticket_prefix`, `imperative`,
+`max_subject_length`, `body_style`) and output defaults (`default_branch`,
+`output_format`). Any other key is rejected, so a cloned repository cannot
+change the provider, model, or API base. Those come from your user config, and
+Commit Pilot never creates the repository file.
 
 For example:
 
-```dotenv
-COMMIT_PILOT_TICKET_PREFIX=PLAT-
-COMMIT_PILOT_MAX_SUBJECT_LENGTH=72
-COMMIT_PILOT_BODY_STYLE=short bullet list
+```yaml
+ticket_prefix: PLAT-
+max_subject_length: 72
+body_style: short bullet list
 ```
 
-## Provider auto-detection
+## Provider selection
 
-When no provider is configured explicitly, commit-pilot probes LM Studio,
-Ollama, and Unsloth Studio in turn and auto-selects the first one that is
-running. An explicit `OPENAI_PROVIDER` or `OPENAI_BASE_URL` is always
-respected and probed on its own.
+Ollama is the default provider (`model: lfm2.5:8b`) and needs no setup. For
+any other OpenAI-compatible server (LM Studio, Unsloth Studio, OpenAI, ...),
+set `provider: openai_compat` with an explicit `base_url` in the config file.
+A named `provider` or a customized `base_url` is always respected and probed on
+its own.
 
 ## Review the commit plan
 
@@ -142,11 +159,10 @@ the run:
 
 ## Custom prompt
 
-Override the default prompt with inline text or a file:
+Override the default prompt with a `prompt` key in the config file:
 
-```bash
-COMMIT_PILOT_PROMPT="Write concise conventional commits" commit-pilot
-COMMIT_PILOT_PROMPT_FILE=myprompt.txt commit-pilot
+```yaml
+prompt: Write concise conventional commits with {files} and {diff}.
 ```
 
 The prompt template uses `{files}` and `{diff}` placeholders for the file list
@@ -162,14 +178,15 @@ commit-pilot --cleanup
 
 ## Providers
 
-`OPENAI_PROVIDER` accepts `lmstudio`, `ollama`, `openai`, `unsloth`, and
-`custom`. Any other value aborts the run, so a typo cannot silently point
-commit-pilot at the wrong endpoint. Use `custom` for an OpenAI-compatible API
-that is not one of the named providers; it requires `OPENAI_BASE_URL`.
+The `provider` config key accepts `ollama` and `openai_compat`. Any other value
+aborts the run, so a typo cannot silently point commit-pilot at the wrong
+endpoint. Use `openai_compat` for an OpenAI-compatible API; it requires a
+`base_url`.
 
 See the provider-specific guides:
 
-- [LMStudio](lmstudio.md) (default, gemma-4-e2b-it-qat)
-- [Ollama](ollama.md) (gemma4:e2b-it-qat)
-- [OpenAI](openai.md) (gpt-4o-mini) or any OpenAI-compatible API
-- [Unsloth Studio](unsloth.md) (unsloth/gemma-4-E4B-it-qat-GGUF)
+- [Ollama](ollama.md) (default, lfm2.5:8b)
+- [OpenAI-compatible](openai_compat.md) (any OpenAI-compatible API)
+- [OpenAI](openai.md) (gpt-5.6-luna)
+- [LM Studio](lmstudio.md) (openai_compat example, lfm2.5:8b)
+- [Unsloth Studio](unsloth.md) (openai_compat example)

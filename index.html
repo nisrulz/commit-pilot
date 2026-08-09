@@ -253,10 +253,11 @@ a:hover { text-decoration: underline; }
       <div class="md-h3">Provider setup</div>
       <div class="md-text">After installing, set up your provider and download the model:</div>
       <div class="md-list">
-        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/lmstudio.md">LMStudio</a> (default, gemma-4-e2b-it-qat)</div>
-        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/ollama.md">Ollama</a> (gemma4:e2b-it-qat)</div>
-        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/openai.md">OpenAI</a> (gpt-4o-mini)</div>
-        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/unsloth.md">Unsloth Studio</a> (gemma-4)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/ollama.md">Ollama</a> (default, lfm2.5:8b)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/openai_compat.md">OpenAI-compatible</a> (any OpenAI-compatible server)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/openai.md">OpenAI</a> (gpt-5.6-luna)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/lmstudio.md">LM Studio</a> (openai_compat example)</div>
+        <div class="md-li"><a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/unsloth.md">Unsloth Studio</a> (openai_compat example)</div>
       </div>
     </div>
     <div class="prompt-line">
@@ -280,26 +281,17 @@ a:hover { text-decoration: underline; }
       </div>
       <div class="md-h3">Providers</div>
       <div class="md-text">Download the model in your provider first, then run commit-pilot.</div>
-      <div class="md-text">Use environment variables or a user config file:</div>
-      <table>
-        <tr><th>env var</th><th>description</th><th>default</th></tr>
-        <tr><td>OPENAI_PROVIDER</td><td>Provider: lmstudio, ollama, openai, unsloth, custom</td><td>lmstudio</td></tr>
-        <tr><td>OPENAI_MODEL</td><td>Model name</td><td>gemma-4-e2b-it-qat</td></tr>
-        <tr><td>OPENAI_BASE_URL</td><td>API base URL</td><td>http://localhost:1234/v1</td></tr>
-        <tr><td>OPENAI_API_KEY</td><td>API key</td><td>unset</td></tr>
-      </table>
+      <div class="md-text">Ollama is the default provider (model <span class="md-bold">lfm2.5:8b</span>). For any other OpenAI-compatible server (LM Studio, Unsloth Studio, OpenAI, ...), set the provider in your config file:</div>
       <div class="md-code">
-        <div class="line">OPENAI_PROVIDER=lmstudio commit-pilot  <span class="comment"># LMStudio (default)</span></div>
-        <div class="line">OPENAI_PROVIDER=ollama OPENAI_MODEL=gemma4:e2b-it-qat commit-pilot</div>
-        <div class="line">OPENAI_PROVIDER=openai OPENAI_API_KEY=sk-... commit-pilot</div>
-        <div class="line">OPENAI_PROVIDER=unsloth OPENAI_API_KEY=sk-... commit-pilot</div>
-        <div class="line">COMMIT_PILOT_CONTEXT_WINDOW=131072 commit-pilot  <span class="comment"># 128k context</span></div>
+        <div class="line">provider: openai_compat                    <span class="comment"># any OpenAI-compatible API</span></div>
+        <div class="line">base_url: http://localhost:1234/v1          <span class="comment"># or https://api.openai.com/v1</span></div>
+        <div class="line">model: lfm2.5:8b</div>
       </div>
+      <div class="md-text">The API key is read from the <span class="md-bold">COMMIT_PILOT_OPENAI_COMPAT_API_KEY</span> environment variable only.</div>
       <div class="md-h3">Custom prompt</div>
-      <div class="md-text">Override the default prompt with inline text or a file:</div>
+      <div class="md-text">Override the default prompt with a <span class="md-bold">prompt</span> key in the config file:</div>
       <div class="md-code">
-        <div class="line">COMMIT_PILOT_PROMPT=<span class="string">"Write concise commits"</span> commit-pilot</div>
-        <div class="line">COMMIT_PILOT_PROMPT_FILE=myprompt.txt commit-pilot</div>
+        <div class="line">prompt: Write concise conventional commits with {files} and {diff}.</div>
       </div>
     </div>
     <div class="prompt-line">
@@ -309,30 +301,28 @@ a:hover { text-decoration: underline; }
 
     <div class="md-section">
       <div class="md-h2">Configuration</div>
-      <div class="md-text">Environment variable &gt; config file &gt; built-in default</div>
+      <div class="md-text">The CLI ships no config. On first run a config file is created with the default values; it is the source of truth. Command-line flags override it for a single run.</div>
+      <div class="md-text">Config file: <span class="md-bold">~/.config/commit-pilot/config.yaml</span> (or <span class="md-bold">$COMMIT_PILOT_CONFIG_DIR/commit-pilot/config.yaml</span>).</div>
       <table>
-        <tr><th>setting</th><th>env var</th><th>default</th></tr>
-        <tr><td>provider</td><td>OPENAI_PROVIDER</td><td>lmstudio <span class="comment">(lmstudio, ollama, openai, unsloth, custom)</span></td></tr>
-        <tr><td>model</td><td>OPENAI_MODEL</td><td>gemma-4-e2b-it-qat</td></tr>
-        <tr><td>api base</td><td>OPENAI_BASE_URL</td><td>http://localhost:1234/v1</td></tr>
-        <tr><td>api key</td><td>OPENAI_API_KEY</td><td>unset</td></tr>
+        <tr><th>setting</th><th>config file key</th><th>default</th></tr>
+        <tr><td>provider</td><td>provider</td><td>ollama <span class="comment">(ollama | openai_compat)</span></td></tr>
+        <tr><td>model</td><td>model</td><td>lfm2.5:8b</td></tr>
+        <tr><td>api base</td><td>base_url</td><td>http://localhost:11434/v1</td></tr>
+        <tr><td>api key</td><td>COMMIT_PILOT_OPENAI_COMPAT_API_KEY</td><td>unset</td></tr>
         <tr><td>single commit</td><td><span class="flag">--single</span></td><td>auto-chunk</td></tr>
         <tr><td>dry run</td><td><span class="flag">--dry-run</span></td><td>false</td></tr>
         <tr><td>cleanup</td><td><span class="flag">--cleanup</span></td><td>false</td></tr>
-        <tr><td>prompt</td><td>COMMIT_PILOT_PROMPT</td><td>built-in</td></tr>
-        <tr><td>prompt file</td><td>COMMIT_PILOT_PROMPT_FILE</td><td>unset</td></tr>
-        <tr><td>context window</td><td>COMMIT_PILOT_CONTEXT_WINDOW</td><td>65536 <span class="comment">(64k tokens)</span></td></tr>
-        <tr><td>retries</td><td>COMMIT_PILOT_RETRIES</td><td>2</td></tr>
-        <tr><td>request timeout</td><td>COMMIT_PILOT_TIMEOUT_SECONDS</td><td>180</td></tr>
-        <tr><td>config directory</td><td>COMMIT_PILOT_CONFIG_DIR</td><td>~/.config/commit-pilot</td></tr>
-        <tr><td>tmp summaries dir</td><td>COMMIT_PILOT_TMP_DIR</td><td>~/.commit-pilot/tmp</td></tr>
-        <tr><td>conventional commits</td><td>COMMIT_PILOT_CONVENTIONAL_COMMITS</td><td>true</td></tr>
-        <tr><td>ticket prefix</td><td>COMMIT_PILOT_TICKET_PREFIX</td><td>unset</td></tr>
-        <tr><td>imperative tone</td><td>COMMIT_PILOT_IMPERATIVE_TONE</td><td>true</td></tr>
-        <tr><td>subject limit</td><td>COMMIT_PILOT_MAX_SUBJECT_LENGTH</td><td>100</td></tr>
-        <tr><td>body style</td><td>COMMIT_PILOT_BODY_STYLE</td><td>model default</td></tr>
+        <tr><td>prompt</td><td>prompt</td><td>built-in</td></tr>
+        <tr><td>context window</td><td>context_window</td><td>65536 <span class="comment">(64k tokens)</span></td></tr>
+        <tr><td>retries</td><td>retries</td><td>2</td></tr>
+        <tr><td>request timeout</td><td>timeout_seconds</td><td>180</td></tr>
+        <tr><td>conventional commits</td><td>conventional</td><td>true</td></tr>
+        <tr><td>ticket prefix</td><td>ticket_prefix</td><td>unset</td></tr>
+        <tr><td>imperative tone</td><td>imperative</td><td>true</td></tr>
+        <tr><td>subject limit</td><td>max_subject_length</td><td>100</td></tr>
+        <tr><td>body style</td><td>body_style</td><td>model default</td></tr>
       </table>
-      <div class="md-text">Reusable defaults go in a <span class="md-bold">config.env</span> file inside the config directory. Project config can set message preferences, but it cannot change the provider, model, or API base. Environment variables always win.</div>
+      <div class="md-text">The API key is never stored in the config file. Project config can set message preferences, but it cannot change the provider, model, or API base.</div>
     </div>
     <div class="prompt-line">
       <span class="prompt">commit-pilot@git</span><span class="prompt-arrow">❯</span>
@@ -349,7 +339,7 @@ a:hover { text-decoration: underline; }
         <div class="md-li"><span class="md-bold">Single mode</span>: all changes go into one commit</div>
         <div class="md-li"><span class="md-bold">Execution</span>: refuses partially staged files, then commits each logical group</div>
       </div>
-      <div class="md-text">With LM Studio, the context window is <span class="md-bold">auto-detected</span> based on available RAM and model limits. You don't need to configure anything.</div>
+      <div class="md-text">Ollama is the default provider. Any other OpenAI-compatible server is configured through the <span class="md-bold">openai_compat</span> provider with a <span class="md-bold">base_url</span>.</div>
       <div class="md-text">See <a href="https://github.com/nisrulz/commit-pilot/blob/main/docs/how-it-works.md">how-it-works.md</a> for dry-run and commit output examples.</div>
       <div class="md-code">
         <div class="line"><span class="warn">❯</span> commit-pilot</div>

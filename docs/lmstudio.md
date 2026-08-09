@@ -1,4 +1,7 @@
-# LMStudio
+# LM Studio
+
+LM Studio is a local, OpenAI-compatible server. Point the `openai_compat`
+provider at it with a `base_url`.
 
 ## Install
 
@@ -10,24 +13,22 @@ Or download from [lmstudio.ai](https://lmstudio.ai).
 
 ## Download model
 
-Downloads the default model and starts the server:
+The script downloads the default model (`LiquidAI/LFM2.5-8B-A1B-GGUF`, the
+same model as Ollama's `lfm2.5:8b`) and starts the server:
 
 ```bash
 make setup-lmstudio
 ```
 
-## Run commit-pilot
+## Configure commit-pilot
 
-This is the default provider, so you don't need any env vars:
+Ollama is the default provider. To use LM Studio instead, edit your config file
+(`~/.config/commit-pilot/config.yaml`):
 
-```bash
-commit-pilot
-```
-
-Explicitly:
-
-```bash
-OPENAI_PROVIDER=lmstudio OPENAI_MODEL=gemma-4-e2b-it-qat commit-pilot
+```yaml
+provider: openai_compat
+model: LiquidAI/LFM2.5-8B-A1B-GGUF
+base_url: http://localhost:1234/v1
 ```
 
 Check the server and model name:
@@ -35,12 +36,4 @@ Check the server and model name:
 ```bash
 commit-pilot --doctor
 commit-pilot --list-models
-```
-
-Custom API base:
-
-```bash
-OPENAI_BASE_URL=http://localhost:1234/v1 \
-  OPENAI_MODEL=gemma-4-e2b-it-qat \
-  commit-pilot
 ```

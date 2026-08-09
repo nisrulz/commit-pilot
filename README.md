@@ -3,10 +3,9 @@
 Never type `git commit -m "fix stuff"` again.
 
 Commit Pilot reads your uncommitted changes, groups related files, and writes
-conventional commit messages through LM Studio (default), Ollama, Unsloth
-Studio, or any OpenAI-compatible API. Local-first and zero telemetry: diffs go
-only to the provider you configure, so with a local provider they never leave
-your machine.
+conventional commit messages through Ollama (default) or any OpenAI-compatible
+API. Local-first and zero telemetry: diffs go only to the provider you
+configure, so with a local provider they never leave your machine.
 
 ![Banner](img/github_banner.webp)
 
@@ -15,7 +14,7 @@ your machine.
 ## Features
 
 - **Conventional commits, no thinking required.** Groups related files and writes `feat:`, `fix:`, `chore:` subjects with focused bodies.
-- **Local-first.** Diffs stay on your machine with LM Studio, Ollama, or Unsloth Studio.
+- **Local-first.** Diffs stay on your machine with Ollama or any local OpenAI-compatible server.
 - **Zero telemetry.** No analytics, no callbacks. Project config cannot change where your diff is sent.
 - **Handles large diffs.** Batches files and chunks oversized ones across multiple LLM calls.
 - **Plan before you commit.** Review or edit the plan first; `--plan-lint` validates edited plans.
@@ -27,7 +26,7 @@ your machine.
 curl -sfL https://github.com/nisrulz/commit-pilot/releases/latest/download/install.sh | sh
 ```
 
-Then, with LM Studio running:
+Then, with Ollama running:
 
 ```bash
 commit-pilot
@@ -37,18 +36,14 @@ That's it. Review the proposed commits and press enter. No Go needed; `make
 install` works from source with Go 1.25+. The installer verifies a SHA-256
 checksum before installing.
 
-When no provider is configured explicitly, Commit Pilot probes LM Studio,
-Ollama, and Unsloth Studio and auto-selects the first one that is running, so
-pointing it at a local server needs no setup.
-
-## Providers
-
-`OPENAI_PROVIDER` picks your backend: `lmstudio` (default), `ollama`, `unsloth`,
-`openai`, or `custom`. Guides: [LM Studio](docs/lmstudio.md) · [Ollama](docs/ollama.md) · [OpenAI](docs/openai.md) · [Unsloth Studio](docs/unsloth.md)
+Ollama is the default provider (model `lfm2.5:8b`). For any other
+OpenAI-compatible server, set `provider: openai_compat` and a `base_url` in the
+config file. See [Providers](docs/openai_compat.md).
 
 ## Dig deeper
 
 - [Usage](docs/usage.md): configuration, plan review, flags, custom prompts
+- [Providers](docs/openai_compat.md): OpenAI, Ollama, LM Studio, Unsloth Studio
 - [How it works](docs/how-it-works.md)
 - [Development](docs/dev.md)
 

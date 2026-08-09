@@ -26,11 +26,12 @@ commit-pilot/
 │   ├── dev.md            # Development guide
 │   ├── github-pages.md   # Website deployment
 │   ├── how-it-works.md   # How commit-pilot works
-│   ├── lmstudio.md       # LMStudio setup
+│   ├── lmstudio.md       # LM Studio setup (openai_compat example)
 │   ├── ollama.md         # Ollama setup
-│   ├── openai.md         # OpenAI setup
+│   ├── openai.md         # OpenAI setup (openai_compat example)
+│   ├── openai_compat.md  # OpenAI-compatible providers setup
 │   ├── testing.md        # Unit, e2e, and live test guide
-│   ├── unsloth.md        # Unsloth Studio setup
+│   ├── unsloth.md        # Unsloth Studio setup (openai_compat example)
 │   └── usage.md          # Usage reference
 ├── img/
 │   ├── github_banner.webp
@@ -66,17 +67,13 @@ commit-pilot/
 │       ├── banner.go     # Startup banner rendering and version
 │       ├── banner_art.go # Banner ASCII art and tagline
 │       ├── batch.go      # Batch splitting and diff chunking
-│       ├── context.go    # Dynamic context window detection
 │       ├── doctor.go     # Doctor checks and model listing
 │       ├── output.go     # Terminal/JSON output helpers and fatal errors
-│       ├── probe.go      # Provider reachability probing and auto-detection
+│       ├── probe.go      # Provider reachability probing
 │       ├── provider/     # Pluggable model-serving backends (one file per provider)
-│       │   ├── provider.go   # Provider interface, registry, shared probe/listing helpers
-│       │   ├── openai.go     # OpenAI-compatible hosted endpoints
-│       │   ├── ollama.go     # Ollama local API
-│       │   ├── lmstudio.go   # LM Studio local API
-│       │   ├── unsloth.go    # Unsloth Studio (health-probed, key-protected API)
-│       │   └── custom.go     # Generic OpenAI-compatible endpoint (OPENAI_BASE_URL)
+│       │   ├── provider.go       # Provider interface, registry, shared probe/listing helpers
+│       │   ├── openai_compat.go  # OpenAI-compatible endpoints (hosted or local)
+│       │   └── ollama.go         # Ollama local API
 │       └── prompt.txt    # Default prompt templates (embedded)
 ├── tests/
 │   ├── *_test.go           # Unit tests (package lib_test)
@@ -108,6 +105,52 @@ commit-pilot/
 ## Testing
 
 See [testing.md](testing.md) for the unit, end-to-end, and live test suites and how to run them.
+
+### Live test
+
+The integration test runs commit-pilot against a real AI endpoint.
+
+The script checks that your AI provider is reachable before starting. If it is not, it prints setup instructions.
+
+The script builds a YAML config file under a temp config base and runs the binary
+with `COMMIT_PILOT_CONFIG_DIR` set. `OPENAI_BASE_URL` / `OPENAI_API_KEY` are
+test harness inputs used to build that config. They are not read by the tool
+itself.
+
+**Ollama (default):**
+```bash
+make test-live
+```
+
+**LM Studio (openai_compat):**
+```bash
+OPENAI_BASE_URL=http://localhost:1234/v1 make test-live
+```
+
+**OpenAI (or any OpenAI-compatible endpoint):**
+```bash
+OPENAI_BASE_URL=https://api.openai.com/v1 \
+  OPENAI_API_KEY=sk-... \
+  make test-live
+```
+
+**Unsloth Studio (openai_compat):**
+```bash
+OPENAI_BASE_URL=http://localhost:8888/v1 \
+  OPENAI_API_KEY=sk-unsloth-... \
+  make test-live
+```
+
+It sets up a temporary git repo with staged changes across docs, config, and code, then runs commit-pilot in dry-run mode. It checks for:
+
+- Git repo detection (non-git dir says error)
+- No changes (empty repo says message)
+- File detection (counts multi-file changes)
+- AI pipeline (git scan reaches AI call)
+- Single commit mode (`--single` flag)
+- Binary file detection (`.bin` file listed)
+
+The temp directory `.temp-test/` lives in the project root and gets cleaned up when the script finishes.
 
 ## Releasing
 
