@@ -223,7 +223,7 @@ git init -q
 git config user.email "test@test"
 git config user.name "Test"
 git commit --allow-empty -m "init" -q
-printf '\xff\xd8\xff\xe0\x00\x10\x4a\x46\x49\x46' > logo.bin
+printf '\377\330\377\340\000\020\112\106\111\106' > logo.bin
 git add logo.bin
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/binary" "--single")
@@ -542,12 +542,12 @@ git init -q
 git config user.email "test@test"
 git config user.name "Test"
 # Create small binary files (just headers)
-printf '\xff\xd8\xff\xe0\x00\x10JFIF\x00' > small.jpg
-printf '\x89PNG\r\n\x1a\n\x00\x00' > small.png
+printf '\377\330\377\340\000\020JFIF\000' > small.jpg
+printf '\211PNG\r\n\032\n\000\000' > small.png
 git add -A && git commit -m "initial" -q
 
 # Add another small binary
-printf '\x1f\x8b\x08\x00\x00\x00\x00\x00' > small.gz
+printf '\037\213\010\000\000\000\000\000' > small.gz
 git add small.gz
 cd "$PROJECT_DIR"
 OUT=$(run_in "$TESTDIR/smallbinary" "--single")
