@@ -86,6 +86,9 @@ func newGitRepo(t *testing.T) string {
 	runGit(t, dir, "init", "-q")
 	runGit(t, dir, "config", "user.email", "test@test")
 	runGit(t, dir, "config", "user.name", "Test")
+	// Pin the hooks path so a global core.hooksPath cannot silence the
+	// repo-local hooks these tests install.
+	runGit(t, dir, "config", "core.hooksPath", ".git/hooks")
 	runGit(t, dir, "commit", "--allow-empty", "-m", "init", "-q")
 	return dir
 }
