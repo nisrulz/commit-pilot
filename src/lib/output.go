@@ -49,6 +49,18 @@ func PrintJSON(value any) {
 	fmt.Println(string(data))
 }
 
+// commitStatus maps the run outcome to the JSON status string.
+func commitStatus(cfg Config, committed bool) string {
+	switch {
+	case cfg.DryRun:
+		return "dry_run"
+	case !committed:
+		return "cancelled"
+	default:
+		return "completed"
+	}
+}
+
 // Die reports a fatal error in the current output mode and exits with code 1.
 func Die(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)

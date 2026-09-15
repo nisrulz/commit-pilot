@@ -129,6 +129,33 @@ func TestFallbackPlan_invalidJSON(t *testing.T) {
 	}
 }
 
+func TestLocalSummaryCountsDiffLines(t *testing.T) {
+	diff := "--- a/a.go\n+++ b/a.go\n+added line\n-removed line\n context\n"
+	s := lib.LocalSummary(lib.FileDiff{Path: "src/a.go", Diff: diff})
+	if s.File != "src/a.go" {
+		t.Fatalf("File = %q, want src/a.go", s.File)
+	}
+	if !strings.Contains(s.Summary, "1 lines added") || !strings.Contains(s.Summary, "1 lines removed") {
+		t.Fatalf("summary does not report diff stats: %q", s.Summary)
+	}
+	if len(s.Changes) == 0 {
+		t.Fatal("expected at least one change entry")
+	}
+}
+
+func TestFallbackCommitGroupCoversFiles(t *testing.T) {
+	group := lib.FallbackCommitGroup([]string{"a.go", "b.go"})
+	if group.Subject != "chore: update changes" {
+		t.Fatalf("subject = %q, want 'chore: update changes'", group.Subject)
+	}
+	if len(group.Files) != 2 {
+		t.Fatalf("expected 2 files, got %v", group.Files)
+	}
+	if !strings.Contains(group.Description, "a.go") || !strings.Contains(group.Description, "b.go") {
+		t.Fatalf("description should name the files: %q", group.Description)
+	}
+}
+
 func TestPlanFromSummariesFailsWhenNoJSONOnRetry(t *testing.T) {
 	doer := &recordingDoer{responses: []recordedResponse{
 		{status: 200, body: chatContent("no json here")},

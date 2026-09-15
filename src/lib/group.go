@@ -2,6 +2,7 @@ package lib
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -45,12 +46,35 @@ func GroupFromAI(tmpl string, cfg Config, files []FileDiff, maxTokens int) (Comm
 	}
 
 	prompt := FormatPrompt(tmpl, fileList, FormatDiffSection(files))
-	result, err := CallLLM(prompt, cfg, maxTokens)
+	result, err := callWithTruncationRetry(prompt, cfg, maxTokens)
+	if err != nil && isContextLengthError(err) {
+		// The batch overflowed the model even after size-based batching. Trim
+		// the diffs and try once more before the caller falls back.
+		PrintProcessing("Input too large for the model, retrying with truncated diffs...")
+		prompt = FormatPrompt(tmpl, fileList, FormatDiffSection(truncateFiles(files)))
+		result, err = callWithTruncationRetry(prompt, cfg, maxTokens)
+	}
 	if err != nil {
 		return CommitGroup{}, fmt.Errorf("AI call: %w", err)
 	}
 
 	return ParseCommitGroup(result)
+}
+
+// truncateFiles shortens every diff to its head and tail, used only after a
+// context-length error to bring the request back within the model window.
+func truncateFiles(files []FileDiff) []FileDiff {
+	truncated := make([]FileDiff, len(files))
+	for i, f := range files {
+		truncated[i] = FileDiff{Path: f.Path, Diff: TruncateDiff(f.Diff)}
+	}
+	return truncated
+}
+
+// isContextLengthError reports whether err is a ContextLengthError.
+func isContextLengthError(err error) bool {
+	var ctxErr *ContextLengthError
+	return errors.As(err, &ctxErr)
 }
 
 // GroupFromAIChunked summarizes each chunk of an oversized file separately and

@@ -2,7 +2,6 @@ package lib
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -61,23 +60,9 @@ func PlanFromSummaries(tmpl string, cfg Config, summariesJSON string) ([]CommitG
 // with a larger output budget if the model's response was cut off mid-
 // generation.
 func callPlanLLM(prompt string, cfg Config) (string, error) {
-	result, err := callLLMWithSpinner(prompt, cfg, DefaultMaxTokens)
-	if err == nil {
-		return result, nil
-	}
-	var trunc *TruncatedError
-	if !errors.As(err, &trunc) {
-		return "", err
-	}
-	PrintProcessing("Plan was cut off, retrying with a larger output budget...")
-	return callLLMWithSpinner(prompt, cfg, DefaultMaxTokens*2)
-}
-
-// callLLMWithSpinner runs a single LLM call under a working spinner.
-func callLLMWithSpinner(prompt string, cfg Config, maxTokens int) (string, error) {
 	stop := startSpinner()
 	defer stop()
-	return CallLLM(prompt, cfg, maxTokens)
+	return callWithTruncationRetry(prompt, cfg, DefaultMaxTokens)
 }
 
 // CompactSummariesForPlan shrinks the summaries so the planning prompt fits the
@@ -140,9 +125,23 @@ func FallbackPlan(summariesJSON string) []CommitGroup {
 	for i, s := range summaries {
 		files[i] = s.File
 	}
-	return []CommitGroup{{
-		Subject:     "chore: update changes",
-		Description: "Automated commit from commit-pilot",
-		Files:       files,
-	}}
+	group := FallbackCommitGroup(files)
+	group.Description = fallbackPlanDescription(summaries)
+	return []CommitGroup{group}
+}
+
+// fallbackPlanDescription lists each file and its summary so the fallback plan
+// still reads as a usable commit body.
+func fallbackPlanDescription(summaries []FileSummary) string {
+	var b strings.Builder
+	b.WriteString("Automated commit from commit-pilot")
+	for _, s := range summaries {
+		b.WriteString("\n- ")
+		b.WriteString(sanitizePath(s.File))
+		if s.Summary != "" {
+			b.WriteString(": ")
+			b.WriteString(sanitizeLine(s.Summary, 200))
+		}
+	}
+	return b.String()
 }

@@ -1,14 +1,12 @@
 package lib
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -87,10 +85,51 @@ func (e *TruncatedError) Error() string {
 	return fmt.Sprintf("AI response was cut off at %d tokens", e.MaxTokens)
 }
 
+// UnreachableError reports that the provider could not be contacted at all.
+// Unlike a per-stage failure, it fails the run: a dead endpoint is a
+// configuration problem, not a reason to commit generic messages.
+type UnreachableError struct {
+	Base string
+}
+
+func (e *UnreachableError) Error() string {
+	return "could not reach provider at " + e.Base
+}
+
+// IsUnreachable reports whether err means the provider endpoint is down.
+func IsUnreachable(err error) bool {
+	var unreachable *UnreachableError
+	return errors.As(err, &unreachable)
+}
+
+// ProviderError is a non-2xx provider response that carries the provider's own
+// message, so the reason survives all the way to the user.
+type ProviderError struct {
+	Status  int
+	Message string
+}
+
+func (e *ProviderError) Error() string {
+	return fmt.Sprintf("provider error (status %d): %s", e.Status, e.Message)
+}
+
 // CallLLM sends a prompt to the configured provider and returns the response
 // text, using the config's context for cancellation and retry handling.
 func CallLLM(prompt string, cfg Config, maxTokens int) (string, error) {
 	return CallLLMContext(cfg.Context, prompt, cfg, maxTokens)
+}
+
+// callWithTruncationRetry calls the model and, when the response is cut off at
+// the output budget, retries once with a doubled budget. Every pipeline stage
+// uses this so a truncated reply never fails a stage outright.
+func callWithTruncationRetry(prompt string, cfg Config, maxTokens int) (string, error) {
+	result, err := CallLLM(prompt, cfg, maxTokens)
+	var trunc *TruncatedError
+	if !errors.As(err, &trunc) {
+		return result, err
+	}
+	PrintProcessing("Response was cut off, retrying with a larger output budget...")
+	return CallLLM(prompt, cfg, maxTokens*2)
 }
 
 // CallLLMContext sends a prompt to the provider with explicit parent context.
@@ -107,130 +146,70 @@ func CallLLMContext(parent context.Context, prompt string, cfg Config, maxTokens
 	if err := ValidateProviderURL(cfg.APIBase); err != nil {
 		return "", err
 	}
-	apiURL := strings.TrimRight(cfg.APIBase, "/") + "/chat/completions"
-
-	client := cfg.HTTPClient
-	if client == nil {
-		client = newProviderHTTPClient(0)
+	call := newChatCall(parent, prompt, cfg, maxTokens)
+	last, ok := call.send()
+	if ok {
+		return parseChatResponse(last.body, maxTokens)
 	}
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = defaultTimeout
+	if call.parent.Err() != nil {
+		return "", call.parent.Err()
 	}
-	retries := cfg.Retries
-	if retries < 0 {
-		retries = 0
-	}
-	tier := formatTierObject
-	if jsonSchemaForPrompt(prompt) != nil {
-		tier = formatTierSchema
-	}
-	var respBody []byte
-	var status int
-	for attempt := 0; attempt <= retries; attempt++ {
-		reqBody, err := json.Marshal(ChatRequest{
-			Model:          cfg.Model,
-			Messages: []ChatMessage{
-				{Role: "system", Content: llmSystemInstruction},
-				{Role: "user", Content: prompt},
-			},
-			Temperature:    0.2,
-			MaxTokens:      maxTokens,
-			ResponseFormat: responseFormatForTier(tier, prompt),
-		})
-		if err != nil {
-			return "", fmt.Errorf("marshal request: %w", err)
-		}
+	return "", requestFailure(call.cfg, prompt, last)
+}
 
-		var retryAfter time.Duration
-		ctx, cancel := context.WithTimeout(parent, timeout)
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(reqBody))
-		if err != nil {
-			cancel()
-			return "", fmt.Errorf("create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if cfg.APIKey != "" {
-			req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-		}
-
-		resp, err := client.Do(req)
-		if err == nil {
-			status = resp.StatusCode
-			if seconds, parseErr := strconv.Atoi(resp.Header.Get("Retry-After")); parseErr == nil && seconds > 0 {
-				retryAfter = time.Duration(seconds) * time.Second
-			}
-			respBody, err = io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
-			resp.Body.Close()
-		}
-		cancel()
-		if err == nil && status == http.StatusOK {
-			break
-		}
-		// Providers without structured output reject the format with a 4xx.
-		// Degrade one step (json_schema -> json_object -> plain) and retry
-		// before reporting a failure.
-		if err == nil && tier > formatTierNone && isResponseFormatRejection(status) {
-			tier--
-			attempt--
-			continue
-		}
-		if attempt == retries || (err == nil && status != http.StatusTooManyRequests && status < http.StatusInternalServerError) {
-			if err != nil {
-				if _, ok := err.(*url.Error); ok {
-					return "", fmt.Errorf("could not reach provider at %s", cfg.APIBase)
-				}
-				return "", fmt.Errorf("http request: %w", err)
-			}
-			break
-		}
-		if retryAfter == 0 {
-			retryAfter = time.Second << attempt
-		}
-		select {
-		case <-parent.Done():
-			return "", parent.Err()
-		case <-time.After(retryAfter):
-		}
-	}
-
-	if status != http.StatusOK {
-		errMsg := strings.TrimSpace(string(respBody))
-
-		// Detect context length errors from various providers.
-		if IsContextLengthError(errMsg) {
-			return "", &ContextLengthError{
-				Message:   fmt.Sprintf("Input too large for model context window (%s)", cfg.Model),
-				Estimated: EstimateTokens(prompt),
-				Available: cfg.ContextWindow,
-			}
-		}
-
-		// Try to extract a clean message from provider JSON error responses.
-		clean := cleanAPIError(errMsg)
-		if clean != "" {
-			Warning(clean)
-			return "", fmt.Errorf("request failed")
-		}
-		return "", fmt.Errorf("request failed (status %d)", status)
-	}
-
+// parseChatResponse extracts the assistant text from a 200 response. A "length"
+// finish reason means the output budget was exhausted mid-generation, so the
+// response is incomplete and must not be trusted.
+func parseChatResponse(body []byte, maxTokens int) (string, error) {
 	var chatResp ChatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
+	if err := json.Unmarshal(body, &chatResp); err != nil {
 		return "", fmt.Errorf("could not parse AI response")
 	}
-
 	if len(chatResp.Choices) == 0 {
 		return "", fmt.Errorf("empty response from AI")
 	}
-
-	// A "length" finish reason means the output budget was exhausted mid-
-	// generation, so the response is incomplete and must not be trusted.
 	if chatResp.Choices[0].FinishReason == "length" {
 		return "", &TruncatedError{MaxTokens: maxTokens}
 	}
-
 	return chatResp.Choices[0].Message.Content, nil
+}
+
+// requestFailure turns the final failed attempt into a user-facing error.
+func requestFailure(cfg Config, prompt string, last chatAttempt) error {
+	if last.err != nil {
+		var urlErr *url.Error
+		if errors.As(last.err, &urlErr) {
+			return &UnreachableError{Base: cfg.APIBase}
+		}
+		return fmt.Errorf("http request: %w", last.err)
+	}
+
+	errMsg := strings.TrimSpace(string(last.body))
+	if IsContextLengthError(errMsg) {
+		return &ContextLengthError{
+			Message:   fmt.Sprintf("Input too large for model context window (%s)", cfg.Model),
+			Estimated: EstimateTokens(prompt),
+			Available: cfg.ContextWindow,
+		}
+	}
+	if clean := cleanAPIError(errMsg); clean != "" {
+		return &ProviderError{Status: last.status, Message: clean}
+	}
+	return fmt.Errorf("request failed (status %d)", last.status)
+}
+
+// isRetryableStatus reports whether a status code is worth retrying.
+func isRetryableStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
+}
+
+// backoffFor returns the exponential backoff for a zero-based attempt number,
+// capped so the shift cannot overflow.
+func backoffFor(attempt int) time.Duration {
+	if attempt > 20 {
+		attempt = 20
+	}
+	return time.Second << attempt
 }
 
 // isResponseFormatRejection reports whether a status code indicates the

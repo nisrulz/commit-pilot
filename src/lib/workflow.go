@@ -8,17 +8,18 @@ import (
 
 // runWorkflow is the main commit flow: it collects the current git changes and
 // either lints a saved plan, applies a saved plan, or generates new commits
-// through the configured AI provider.
-func runWorkflow(cfg Config) {
+// through the configured AI provider. Every failure is returned so the entry
+// point reports it once.
+func runWorkflow(cfg Config) error {
 	tmpl := ApplyMessagePreferences(LoadPrompt(cfg.Mode, cfg.Prompt), cfg)
 
 	changes, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil {
-		Die("git: %v", err)
+		return fmt.Errorf("git: %w", err)
 	}
 	if len(changes.AllFiles) == 0 {
 		reportNoChanges(cfg)
-		return
+		return nil
 	}
 	filtered := FilterChanges(changes, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
 	if len(filtered) > 0 && !IsQuietOutput() {
@@ -26,123 +27,131 @@ func runWorkflow(cfg Config) {
 	}
 	if len(changes.AllFiles) == 0 {
 		reportNoChanges(cfg)
-		return
+		return nil
 	}
 	if err := ValidateChangeScope(changes); err != nil {
-		Die("unsafe change scope: %v", err)
+		return fmt.Errorf("unsafe change scope: %w", err)
 	}
 
 	switch {
 	case cfg.PlanLint != "":
-		runPlanLint(cfg, changes)
+		return runPlanLint(cfg, changes)
 	case cfg.Apply != "":
-		runApply(cfg, changes)
+		return runApply(cfg, changes)
 	case len(changes.FilesWithDiffs) == 0 && len(changes.BinaryFiles) > 0:
-		runBinaryOnly(cfg, changes)
+		return runBinaryOnly(cfg, changes)
 	default:
-		runGenerate(cfg, changes, tmpl)
+		return runGenerate(cfg, changes, tmpl)
 	}
 }
 
-func runBinaryOnly(cfg Config, changes *Changes) {
+// runBinaryOnly commits changes that hold no diff text (binary files only),
+// without calling the model.
+func runBinaryOnly(cfg Config, changes *Changes) error {
 	groups := AssignBinaryFiles(nil, changes.BinaryFiles)
-	writePlanIfRequested(cfg.PlanOut, groups)
+	if err := writePlanIfRequested(cfg.PlanOut, groups); err != nil {
+		return err
+	}
 	if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
 		if cfg.JSON {
 			PrintRunResult("cancelled")
 		}
-		return
+		return nil
 	}
-	group := groups[0]
-	if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
-		os.Exit(1)
+	if err := commitGroups(groups, cfg, changes); err != nil {
+		return err
 	}
 	if cfg.JSON {
-		status := "completed"
-		if cfg.DryRun {
-			status = "dry_run"
-		}
-		PrintRunResult(status)
+		PrintRunResult(commitStatus(cfg, true))
 	}
+	return nil
 }
 
 // runPlanLint validates a saved plan against the current changes and the
 // configured message preferences, without applying it.
-func runPlanLint(cfg Config, changes *Changes) {
+func runPlanLint(cfg Config, changes *Changes) error {
 	groups, err := ReadPlan(cfg.PlanLint)
 	if err != nil {
-		Die("read plan: %v", err)
+		return fmt.Errorf("read plan: %w", err)
 	}
 	if err := LintPlan(groups, AllFilePaths(changes), cfg); err != nil {
-		Die("invalid plan: %v", err)
+		return fmt.Errorf("invalid plan: %w", err)
 	}
 	if cfg.JSON {
 		PrintJSON(map[string]any{"status": "valid"})
 	} else if !cfg.Quiet {
 		Success("Plan is valid.")
 	}
+	return nil
 }
 
 // runApply validates a saved plan against the current changes and commits each
 // group after the user confirms it.
-func runApply(cfg Config, changes *Changes) {
+func runApply(cfg Config, changes *Changes) error {
 	groups, err := ReadPlan(cfg.Apply)
 	if err != nil {
-		Die("read plan: %v", err)
+		return fmt.Errorf("read plan: %w", err)
 	}
-	allPaths := AllFilePaths(changes)
-	if err := ValidatePlan(groups, allPaths); err != nil {
-		Die("invalid plan: %v", err)
+	if err := ValidatePlan(groups, AllFilePaths(changes)); err != nil {
+		return fmt.Errorf("invalid plan: %w", err)
 	}
 	if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
 		if cfg.JSON {
 			PrintRunResult("cancelled")
 		}
-		return
+		return nil
 	}
-	for _, group := range groups {
-		if !ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
-			os.Exit(1)
-		}
+	if err := commitGroups(groups, cfg, changes); err != nil {
+		return err
 	}
 	if cfg.JSON {
-		status := "completed"
-		if cfg.DryRun {
-			status = "dry_run"
-		}
-		PrintRunResult(status)
+		PrintRunResult(commitStatus(cfg, true))
 	}
+	return nil
 }
 
 // runGenerate turns the current changes into commits using the AI provider: it
 // warns about oversized diffs, dispatches to single or auto mode, then checks
 // for any changes left behind and cleans up temp files on success.
-func runGenerate(cfg Config, changes *Changes, tmpl string) {
+func runGenerate(cfg Config, changes *Changes, tmpl string) error {
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(changes.AllFiles), "changed file")))
 	if len(changes.BinaryFiles) > 0 && !IsQuietOutput() {
 		fmt.Printf("    (binary: %s)\n", strings.Join(sanitizePaths(changes.BinaryFiles), ", "))
 	}
 
-	estimatedTokens := EstimatePromptTokens(tmpl, changes.FilesWithDiffs)
-	if !CanFitInContext(tmpl, changes.FilesWithDiffs, cfg.ContextWindow) && !IsQuietOutput() {
+	// Auto mode sends diffs to the summarize stage, not the single-mode
+	// template, so size the warning against the stage that carries the diff.
+	estimateTemplate := tmpl
+	if cfg.Mode != ModeSingle {
+		estimateTemplate = LoadSection("summarize")
+	}
+	if !CanFitInContext(estimateTemplate, changes.FilesWithDiffs, cfg.ContextWindow) && !IsQuietOutput() {
 		fmt.Printf("  %s Large diff detected (%s tokens estimated, %s token context)\n",
 			yellow("!"),
-			FormatNumber(estimatedTokens),
+			FormatNumber(EstimatePromptTokens(estimateTemplate, changes.FilesWithDiffs)),
 			FormatNumber(cfg.ContextWindow))
 	}
 
 	var summariesPaths []string
 	committed := true
+	var err error
 	if cfg.Mode == ModeSingle {
-		committed = RunSingleMode(changes, cfg, tmpl)
+		committed, err = RunSingleMode(changes, cfg, tmpl)
 	} else {
 		var path string
-		path, committed = RunAutoMode(changes, cfg, tmpl)
+		path, committed, err = RunAutoMode(changes, cfg)
 		summariesPaths = append(summariesPaths, path)
+	}
+	if err != nil {
+		return err
 	}
 
 	if !cfg.DryRun && committed {
-		summariesPaths = append(summariesPaths, CheckAndCommitRemainingChanges(cfg, tmpl))
+		path, err := CheckAndCommitRemainingChanges(cfg)
+		if err != nil {
+			return err
+		}
+		summariesPaths = append(summariesPaths, path)
 	}
 
 	if cfg.Cleanup && committed {
@@ -154,19 +163,16 @@ func runGenerate(cfg Config, changes *Changes, tmpl string) {
 	}
 
 	if cfg.JSON {
-		status := "completed"
-		if cfg.DryRun {
-			status = "dry_run"
-		} else if !committed {
-			status = "cancelled"
-		}
-		PrintRunResult(status)
+		PrintRunResult(commitStatus(cfg, committed))
 	}
+	return nil
 }
 
 // RunSingleMode puts every change into one commit: it processes the changes in
-// context-sized batches, merges the results, and creates a single commit.
-func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
+// context-sized batches, merges the results, and creates a single commit. A
+// batch that the model cannot handle is skipped; the merged subject then falls
+// back to a generic message instead of failing the run.
+func RunSingleMode(changes *Changes, cfg Config, tmpl string) (bool, error) {
 	PrintProcessing("Generating commit message...")
 
 	batches := SplitFilesIntoBatches(tmpl, changes.FilesWithDiffs, cfg.ContextWindow)
@@ -178,12 +184,11 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
 
 		group, err := GroupFromAI(tmpl, cfg, g, DefaultMaxTokens)
 		if err != nil {
-			if ctxErr, ok := err.(*ContextLengthError); ok {
-				PrintContextError(ctxErr)
-				os.Exit(1)
-				return false
+			if IsUnreachable(err) {
+				return false, err
 			}
-			Die("AI call failed: %v", err)
+			reportStageError(err)
+			continue
 		}
 		allGroups = append(allGroups, group)
 	}
@@ -194,23 +199,26 @@ func RunSingleMode(changes *Changes, cfg Config, tmpl string) bool {
 		subject = "chore: update"
 	}
 	group := CommitGroup{Subject: subject, Description: merged.Description, Files: AllFilePaths(changes)}
-	writePlanIfRequested(cfg.PlanOut, []CommitGroup{group})
+	if err := writePlanIfRequested(cfg.PlanOut, []CommitGroup{group}); err != nil {
+		return false, err
+	}
 	if !ConfirmCommitPlan([]CommitGroup{group}, cfg, changes.Fingerprint) {
-		return false
+		return false, nil
 	}
-	if !ExecuteCommit(AllFilePaths(changes), subject, merged.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
-		os.Exit(1)
+	if err := commitGroups([]CommitGroup{group}, cfg, changes); err != nil {
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // RunAutoMode asks the model to organize changes into logical commit groups and
 // commits each group. It returns the summaries temp-file path and whether the
-// user approved the plan.
-func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
+// user approved the plan. Model failures degrade to a locally built plan so the
+// change set is still committed.
+func RunAutoMode(changes *Changes, cfg Config) (string, bool, error) {
 	files := changes.FilesWithDiffs
 	if len(files) == 0 {
-		return "", true
+		return "", true, nil
 	}
 
 	target := SummariesPath()
@@ -223,65 +231,67 @@ func RunAutoMode(changes *Changes, cfg Config, tmpl string) (string, bool) {
 
 	summariesJSON, err := SummarizeChanges(cfg, summarizeTmpl, files, target)
 	if err != nil {
-		if ctxErr, ok := err.(*ContextLengthError); ok {
-			PrintContextError(ctxErr)
-			os.Exit(1)
+		if IsUnreachable(err) {
+			return target, false, err
 		}
-		Die("summarization failed: %v", err)
+		Warningf("summarization failed: %v", err)
 	}
 
-	groups, err := PlanFromSummaries(planTmpl, cfg, summariesJSON)
-	if err != nil {
-		if ctxErr, ok := err.(*ContextLengthError); ok {
-			PrintContextError(ctxErr)
-			os.Exit(1)
+	var groups []CommitGroup
+	if summariesJSON == "" {
+		groups = localFallbackGroups(changes)
+	} else {
+		groups, err = planGroups(planTmpl, cfg, summariesJSON, changes)
+		if err != nil {
+			return target, false, err
 		}
-		Die("planning failed: %v", err)
 	}
-
-	allPaths := AllFilePaths(changes)
-	groups = AssignBinaryFiles(groups, changes.BinaryFiles)
-	if err := ValidatePlan(groups, allPaths); err != nil {
-		Die("invalid generated plan: %v", err)
+	if err := writePlanIfRequested(cfg.PlanOut, groups); err != nil {
+		return target, false, err
 	}
-	writePlanIfRequested(cfg.PlanOut, groups)
 
 	if len(groups) == 0 {
-		return target, true
+		return target, true, nil
 	}
 
 	PrintStep(fmt.Sprintf("Found %s", Pluralize(len(groups), "logical work package")))
 	if !ConfirmCommitPlan(groups, cfg, changes.Fingerprint) {
-		return target, false
+		return target, false, nil
 	}
-	commitFailed := false
-	for _, g := range groups {
-		if !ExecuteCommit(g.Files, g.Subject, g.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope) {
-			commitFailed = true
-		}
+	if err := commitGroups(groups, cfg, changes); err != nil {
+		return target, false, err
 	}
-	if commitFailed {
-		os.Exit(1)
-	}
-	return target, true
+	return target, true, nil
 }
 
-func writePlanIfRequested(path string, groups []CommitGroup) {
+// commitGroups runs the commit for each approved group and stops at the first
+// failure, returning it to the entry point.
+func commitGroups(groups []CommitGroup, cfg Config, changes *Changes) error {
+	for _, group := range groups {
+		if err := ExecuteCommit(group.Files, group.Subject, group.Description, cfg.DryRun, cfg.MaxSubjectLength, changes.EffectiveScope); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writePlanIfRequested(path string, groups []CommitGroup) error {
 	if path == "" {
-		return
+		return nil
 	}
 	if err := WritePlan(path, groups); err != nil {
-		Die("write plan: %v", err)
+		return fmt.Errorf("write plan: %w", err)
 	}
 	if !IsQuietOutput() {
 		fmt.Printf("  %s Plan -> %s\n", yellow("~"), sanitizePath(path))
 	}
+	return nil
 }
 
 // CheckAndCommitRemainingChanges verifies that no changes are left behind after
 // the main commit pass and commits anything that remains, reusing the same
 // filters so excluded or sensitive files never reach the model.
-func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
+func CheckAndCommitRemainingChanges(cfg Config) (string, error) {
 	if !IsQuietOutput() {
 		fmt.Println()
 		PrintProcessing("Checking for any remaining uncommitted changes...")
@@ -289,14 +299,14 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	status, err := GitRun("status", "--porcelain")
 	if err != nil {
-		Die("git status failed: %v", err)
+		return "", fmt.Errorf("git status failed: %w", err)
 	}
 
 	if status == "" {
 		if !IsQuietOutput() {
 			Success("Working directory is clean. Exiting successfully.")
 		}
-		return ""
+		return "", nil
 	}
 
 	if !IsQuietOutput() {
@@ -305,7 +315,7 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 
 	remainingChanges, err := GetGitChangesForScope(cfg.Scope)
 	if err != nil {
-		Die("git status check failed: %v", err)
+		return "", fmt.Errorf("git status check failed: %w", err)
 	}
 
 	FilterChanges(remainingChanges, cfg.Include, cfg.Exclude, cfg.IncludeSensitive)
@@ -314,16 +324,19 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 		if !IsQuietOutput() {
 			Success("No changes remain to commit after filtering. Exiting.")
 		}
-		return ""
+		return "", nil
 	}
 
 	if !IsQuietOutput() {
 		fmt.Printf("  %s Re-analyzing remaining changes for a final commit...\n", yellow("🧠"))
 	}
 
-	path, committed := RunAutoMode(remainingChanges, cfg, tmpl)
+	path, committed, err := RunAutoMode(remainingChanges, cfg)
+	if err != nil {
+		return path, err
+	}
 	if !committed {
-		return path
+		return path, nil
 	}
 
 	finalStatus, _ := GitRun("status", "--porcelain")
@@ -331,12 +344,9 @@ func CheckAndCommitRemainingChanges(cfg Config, tmpl string) string {
 		if !IsQuietOutput() {
 			Success("Clean Checkout Successful")
 		}
-	} else {
-		fmt.Fprintf(os.Stderr, "  %s CRITICAL WARNING: Final git status still shows uncommitted changes:\n", red("🚨"))
-		Warning(finalStatus)
-		os.Exit(1)
+		return path, nil
 	}
-	return path
+	return path, fmt.Errorf("working tree still has uncommitted changes after the run")
 }
 
 // BatchLabel describes a batch for progress output: either a chunk group for a

@@ -42,18 +42,16 @@ func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 	if cfg.ContextWindow <= 0 {
 		cfg.ContextWindow = defaultContextWindow
 	}
-	parent := cfg.Context
-	if parent == nil {
-		parent = context.Background()
+	if cfg.Context == nil {
+		cfg.Context = context.Background()
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancel(cfg.Context)
 	defer cancel()
 	cfg.Context = ctx
 
 	type jobResult struct {
 		index   int
 		summary FileSummary
-		err     error
 	}
 	jobs := make(chan int, len(files))
 	results := make(chan jobResult, len(files))
@@ -62,6 +60,12 @@ func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 	}
 	close(jobs)
 
+	// A dead provider fails the run; any other per-file failure degrades to a
+	// local summary so the rest of the change set still reaches the plan.
+	var (
+		fatalOnce sync.Once
+		fatalErr  error
+	)
 	workers := min(4, len(files))
 	var wg sync.WaitGroup
 	for range workers {
@@ -72,10 +76,18 @@ func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 				fd := files[i]
 				PrintProcessing(fmt.Sprintf("Summarizing %s (%d/%d)...", fd.Path, i+1, len(files)))
 				summary, err := summarizeFile(cfg, tmpl, fd)
-				results <- jobResult{index: i, summary: summary, err: err}
 				if err != nil {
-					cancel()
+					if IsUnreachable(err) {
+						fatalOnce.Do(func() {
+							fatalErr = err
+							cancel()
+						})
+						continue
+					}
+					Warningf("could not summarize %s: %v", sanitizePath(fd.Path), err)
+					summary = LocalSummary(fd)
 				}
+				results <- jobResult{index: i, summary: summary}
 			}
 		}()
 	}
@@ -85,15 +97,11 @@ func SummarizeChanges(cfg Config, tmpl string, files []FileDiff, dst string) (st
 	}()
 
 	summaries := make([]FileSummary, len(files))
-	var firstErr error
 	for result := range results {
-		if result.err != nil && firstErr == nil {
-			firstErr = result.err
-		}
 		summaries[result.index] = result.summary
 	}
-	if firstErr != nil {
-		return "", firstErr
+	if fatalErr != nil {
+		return "", fatalErr
 	}
 
 	out, err := json.MarshalIndent(summaries, "", "  ")
@@ -115,7 +123,7 @@ func summarizeFile(cfg Config, tmpl string, file FileDiff) (FileSummary, error) 
 			PrintProcessing(fmt.Sprintf("Chunk %d/%d of %s", i+1, len(batches), file.Path))
 		}
 		prompt := FormatPrompt(tmpl, []string{file.Path}, batch[0].Diff)
-		result, err := CallLLM(prompt, cfg, DefaultMaxTokens)
+		result, err := callWithTruncationRetry(prompt, cfg, DefaultMaxTokens)
 		if err != nil {
 			return FileSummary{}, fmt.Errorf("summarize %s: %w", file.Path, err)
 		}
@@ -127,6 +135,34 @@ func summarizeFile(cfg Config, tmpl string, file FileDiff) (FileSummary, error) 
 	}
 	merged.Summary = sanitizeText(strings.Join(summaries, "\n"), MaxSummaryLen)
 	return merged, nil
+}
+
+// LocalSummary describes a file from its diff alone, with no model call. It is
+// the last-resort summary when the provider fails for that file, so the run can
+// still produce commits from the change set.
+func LocalSummary(file FileDiff) FileSummary {
+	added, removed := diffLineCounts(file.Diff)
+	summary := fmt.Sprintf("%s: %d lines added, %d lines removed", file.Path, added, removed)
+	return FileSummary{
+		File:    file.Path,
+		Summary: summary,
+		Changes: []string{summary},
+	}
+}
+
+// diffLineCounts counts added and removed lines in a unified diff. It ignores
+// the "+++"/"---" file headers so they are not counted as changes.
+func diffLineCounts(diff string) (added, removed int) {
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
+		case strings.HasPrefix(line, "+"):
+			added++
+		case strings.HasPrefix(line, "-"):
+			removed++
+		}
+	}
+	return added, removed
 }
 
 func ParseSummary(text, file string) FileSummary {

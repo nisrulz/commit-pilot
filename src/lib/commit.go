@@ -11,11 +11,11 @@ import (
 )
 
 // ExecuteCommit stages the given files and creates a commit with the provided
-// subject and description. In dry-run mode nothing is committed. It returns
-// false when there is nothing to commit or the commit fails.
-func ExecuteCommit(files []string, subject, description string, dryRun bool, maxSubjectLength int, scope ChangeScope) bool {
+// subject and description. In dry-run mode nothing is committed. It returns an
+// error when a git command fails, so the caller can report it once.
+func ExecuteCommit(files []string, subject, description string, dryRun bool, maxSubjectLength int, scope ChangeScope) error {
 	if len(files) == 0 {
-		return false
+		return nil
 	}
 
 	normalized := NormalizeCommitGroup(CommitGroup{Subject: subject, Description: description})
@@ -38,14 +38,12 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool, max
 	if !dryRun {
 		if scope != ScopeStaged {
 			if _, err := GitRun(append([]string{"add", "--"}, files...)...); err != nil {
-				Errorf("git add failed: %v", err)
-				return false
+				return fmt.Errorf("git add failed: %w", err)
 			}
 		}
 		commitArgs := append([]string{"commit", "--only", "-m", subject, "-m", description, "--"}, files...)
 		if _, err := GitRun(commitArgs...); err != nil {
-			Errorf("git commit failed: %v", err)
-			return false
+			return fmt.Errorf("git commit failed: %w", err)
 		}
 	}
 
@@ -54,7 +52,7 @@ func ExecuteCommit(files []string, subject, description string, dryRun bool, max
 	}
 	PrintCommitSection(subject, description, files, dryRun)
 	RecordCommit(CommitGroup{Subject: subject, Description: description, Files: files})
-	return true
+	return nil
 }
 
 // ConfirmCommitPlan prints the proposed commit groups and asks the user to

@@ -121,6 +121,18 @@ context_window: 131072  # 128k tokens
 
 Plan linting and plan application do not contact the provider.
 
+## Failure handling
+
+The pipeline degrades instead of stopping when one stage fails:
+
+- A file whose summary call fails uses a local summary built from its diff, so the file still reaches the plan.
+- A plan call or a single-message call that fails falls back to one commit group that covers every file, with a description built from the summaries.
+- A response cut off at the token budget is retried once with a doubled budget.
+- A batch that overflows the model is retried once with truncated diffs.
+
+A provider that cannot be reached at all stops the run with an error. A dead
+endpoint is a setup problem, and a generic commit message would hide it.
+
 ## Provider safety
 
 Commit Pilot only accepts HTTPS provider URLs outside the local machine. Plain

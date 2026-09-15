@@ -269,8 +269,8 @@ func TestExecuteCommitTruncatesSubject(t *testing.T) {
 	runGit(t, dir, "add", "a.go")
 
 	subject := strings.Repeat("x", 150)
-	if ok := lib.ExecuteCommit([]string{"a.go"}, subject, "", false, 100, lib.ScopeStaged); !ok {
-		t.Fatal("ExecuteCommit failed")
+	if err := lib.ExecuteCommit([]string{"a.go"}, subject, "", false, 100, lib.ScopeStaged); err != nil {
+		t.Fatalf("ExecuteCommit failed: %v", err)
 	}
 	head := strings.TrimSpace(runGitOutput(t, dir, "log", "-1", "--format=%s"))
 	if len([]rune(head)) != 100 {
@@ -283,8 +283,8 @@ func TestExecuteCommitEmptySubjectFallback(t *testing.T) {
 	t.Chdir(dir)
 	writeFile(t, dir, "a.go", "package a\n")
 	runGit(t, dir, "add", "a.go")
-	if ok := lib.ExecuteCommit([]string{"a.go"}, "---\n", "body", false, 100, lib.ScopeStaged); !ok {
-		t.Fatal("ExecuteCommit failed")
+	if err := lib.ExecuteCommit([]string{"a.go"}, "---\n", "body", false, 100, lib.ScopeStaged); err != nil {
+		t.Fatalf("ExecuteCommit failed: %v", err)
 	}
 	head := strings.TrimSpace(runGitOutput(t, dir, "log", "-1", "--format=%s"))
 	if head != "chore: update" {
@@ -302,7 +302,7 @@ func TestExecuteCommitReportsRejectedHookWithStdout(t *testing.T) {
 	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho rejected\nexit 1\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if lib.ExecuteCommit([]string{"a.go"}, "test: reject", "", false, 100, lib.ScopeStaged) {
+	if err := lib.ExecuteCommit([]string{"a.go"}, "test: reject", "", false, 100, lib.ScopeStaged); err == nil {
 		t.Fatal("rejected commit was reported as successful")
 	}
 	if subject := strings.TrimSpace(runGitOutput(t, dir, "log", "-1", "--format=%s")); subject != "init" {

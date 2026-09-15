@@ -47,6 +47,8 @@ func Main() {
 		PrintSeparator()
 		cfg = AnnounceProvider(cfg)
 		PrintSeparator()
-		runWorkflow(cfg)
+		if err := runWorkflow(cfg); err != nil {
+			Die("%v", err)
+		}
 	}
 }

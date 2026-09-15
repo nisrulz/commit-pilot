@@ -51,6 +51,63 @@ func resilientRespond(planRespond func(prompt string) string) func(prompt string
 	}
 }
 
+func TestEndToEndPlanStageFailureFallsBack(t *testing.T) {
+	bin := cliBinary(t)
+	repo := newGitRepo(t)
+	writeFile(t, repo, "a.go", "package a\n")
+	runGit(t, repo, "add", "-A")
+
+	// Summarization succeeds; every plan attempt fails. The run must still
+	// commit the change set with a locally built plan.
+	mock := newMockOpenAI(t, resilientRespond(jsonPlan))
+	mock.status = func(prompt string, _ bool) int {
+		if strings.Contains(prompt, "git commit planner") {
+			return 500
+		}
+		return 200
+	}
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--config", mockConfig(t, mock))
+	if err != nil {
+		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+	if result["status"] != "completed" {
+		t.Fatalf("status = %v, want completed\n%s", result["status"], stdout)
+	}
+	if got := lastCommitFiles(t, repo); len(got) != 1 || got[0] != "a.go" {
+		t.Fatalf("expected a.go committed, got %v", got)
+	}
+}
+
+func TestEndToEndSingleModeDegradesOnProviderError(t *testing.T) {
+	bin := cliBinary(t)
+	repo := newGitRepo(t)
+	writeFile(t, repo, "a.go", "package a\n")
+	runGit(t, repo, "add", "-A")
+
+	// Every completion fails. Single mode must fall back to a generic subject
+	// and still commit, instead of exiting.
+	mock := newMockOpenAI(t, mockRespond)
+	mock.status = func(string, bool) int { return 500 }
+	stdout, stderr, err := runCLI(t, bin, repo, nil, "", "--json", "--yes", "--single", "--config", mockConfig(t, mock))
+	if err != nil {
+		t.Fatalf("run failed: %v\nstderr: %s", err, stderr)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+	if result["status"] != "completed" {
+		t.Fatalf("status = %v, want completed", result["status"])
+	}
+	if got := lastCommitFiles(t, repo); len(got) != 1 || got[0] != "a.go" {
+		t.Fatalf("expected a.go committed, got %v", got)
+	}
+}
+
 func TestEndToEndRepairsTruncatedPlan(t *testing.T) {
 	bin := cliBinary(t)
 	repo := newGitRepo(t)

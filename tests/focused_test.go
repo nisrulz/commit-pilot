@@ -117,11 +117,18 @@ func TestSummarizeChangesWritesFileAndReturnsJSON(t *testing.T) {
 	}
 }
 
-func TestSummarizeChangesProviderFailure(t *testing.T) {
+func TestSummarizeChangesProviderFailureFallsBack(t *testing.T) {
 	cfg := cfgWithDoer(staticDoer{err: io.ErrUnexpectedEOF})
-	_, err := lib.SummarizeChanges(cfg, "tpl", []lib.FileDiff{{Path: "a.go", Diff: "x"}}, filepath.Join(t.TempDir(), "s.json"))
-	if err == nil {
-		t.Fatal("expected error when provider call fails")
+	out, err := lib.SummarizeChanges(cfg, "tpl", []lib.FileDiff{{Path: "a.go", Diff: "+code\n-old"}}, filepath.Join(t.TempDir(), "s.json"))
+	if err != nil {
+		t.Fatalf("SummarizeChanges should degrade, got %v", err)
+	}
+	var summaries []lib.FileSummary
+	if err := json.Unmarshal([]byte(out), &summaries); err != nil {
+		t.Fatalf("invalid summaries: %v", err)
+	}
+	if len(summaries) != 1 || summaries[0].File != "a.go" || summaries[0].Summary == "" {
+		t.Fatalf("expected a local fallback summary, got %#v", summaries)
 	}
 }
 
