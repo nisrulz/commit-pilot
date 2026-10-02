@@ -2,6 +2,10 @@
 
 BINARY := commit-pilot
 
+# -trimpath removes local paths, -s and -w drop the symbol table and DWARF data.
+GOFLAGS := -trimpath
+GOLDFLAGS := -s -w
+
 help:
 	@echo "Usage: make <target>"
 	@echo ""
@@ -16,7 +20,7 @@ help:
 	@echo "  test-live             Run live integration test (requires AI provider)"
 
 build:
-	@go build -o $(BINARY) ./src/
+	@go build $(GOFLAGS) -ldflags "$(GOLDFLAGS)" -o $(BINARY) ./src/
 	@printf "  \033[1;32m✓\033[0m Built $(BINARY)\n"
 
 install: build

@@ -8,6 +8,10 @@ before:
 
 builds:
   - main: ./src/
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
     env:
       - CGO_ENABLED=0
     goarch:
